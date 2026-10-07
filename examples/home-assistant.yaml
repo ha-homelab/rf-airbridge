@@ -59,7 +59,9 @@ script:
         description: "8 to 64 binary digits. Preserve all leading zeroes."
         required: true
         selector:
-          text: {}
+          # Keep a value here: HA package merging can discard empty mappings.
+          text:
+            multiline: false
       protocol:
         name: RC-Switch protocol
         description: "The protocol number reported in the received MQTT event."
