@@ -1,0 +1,148 @@
+substitutions:
+  rf_airbridge_path: .
+  rf_source: rf
+  rf_received_topic: rf/received
+  rf_raw_topic: rf/received/raw
+  rf_transmit_result_topic: rf/transmit/result
+
+esphome:
+  includes:
+    - ${rf_airbridge_path}/include/rf_receiver.h
+    - ${rf_airbridge_path}/include/rf_tx_validation.h
+
+external_components:
+  - source:
+      type: local
+      path: ${rf_airbridge_path}/components
+    components: [remote_receiver]
+
+mqtt:
+  id: rf_mqtt
+
+cc1101:
+  id: rf_radio
+  cs_pin: GPIO15
+  frequency: 433.92MHz
+  gdo0_pin:
+    number: GPIO4
+    allow_other_uses: true
+
+remote_receiver:
+  id: rf_receiver
+  pin:
+    number: GPIO4
+    allow_other_uses: true
+  dump: rc_switch
+  tolerance: 30%
+  filter: 250us
+  idle: 4ms
+  on_raw:
+    then:
+      - lambda: |-
+          static rf_bridge::Receiver bridge("${rf_source}", "${rf_received_topic}", "${rf_raw_topic}");
+          bridge.on_receive(x, id(rf_mqtt), id(rf_raw_learning).state, id(rf_tx_active));
+
+globals:
+  - id: rf_tx_active
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+switch:
+  - platform: template
+    id: rf_raw_learning
+    name: Raw RF learning
+    icon: mdi:radio-tower
+    entity_category: diagnostic
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+
+remote_transmitter:
+  id: rf_transmitter
+  pin:
+    number: GPIO4
+    allow_other_uses: true
+  carrier_duty_percent: 100%
+  on_transmit:
+    then:
+      - lambda: |-
+          id(rf_tx_active) = true;
+          id(rf_receiver).suspend();
+          id(rf_radio).set_idle();
+          id(rf_radio).begin_tx();
+  on_complete:
+    then:
+      - lambda: |-
+          id(rf_radio).set_idle();
+          id(rf_radio).begin_rx();
+          id(rf_receiver).resume();
+          id(rf_tx_active) = false;
+
+api:
+  actions:
+    - action: send_rf_code
+      variables:
+        code: string
+        protocol: int
+        repeats: int
+      then:
+        - if:
+            condition:
+              lambda: return rf_bridge::valid_tx_request(code, protocol, repeats);
+            then:
+              - if:
+                  condition:
+                    not:
+                      script.is_running: rf_send_job
+                  then:
+                    - script.execute:
+                        id: rf_send_job
+                        code: !lambda return code;
+                        protocol: !lambda return protocol;
+                        repeats: !lambda return repeats;
+                  else:
+                    - mqtt.publish_json:
+                        topic: ${rf_transmit_result_topic}
+                        qos: 0
+                        retain: false
+                        payload: |-
+                          root["source"] = "${rf_source}";
+                          root["status"] = "busy";
+            else:
+              - mqtt.publish_json:
+                  topic: ${rf_transmit_result_topic}
+                  qos: 0
+                  retain: false
+                  payload: |-
+                    root["source"] = "${rf_source}";
+                    root["status"] = "invalid_request";
+                    root["reason"] = "Expected 8-64 binary digits, protocol 1-8, repeats 1-10";
+
+script:
+  - id: rf_send_job
+    mode: single
+    parameters:
+      code: string
+      protocol: int
+      repeats: int
+    then:
+      - remote_transmitter.transmit_rc_switch_raw:
+          transmitter_id: rf_transmitter
+          code: !lambda return code;
+          protocol: !lambda return esphome::remote_base::RC_SWITCH_PROTOCOLS[protocol];
+          repeat:
+            times: !lambda return repeats;
+            wait_time: 10ms
+      - mqtt.publish_json:
+          topic: ${rf_transmit_result_topic}
+          qos: 0
+          retain: false
+          payload: |-
+            root["source"] = "${rf_source}";
+            root["status"] = "send_finished";
+            root["code"] = code;
+            root["protocol"] = protocol;
+            root["repeats"] = repeats;
+            root["receiver_resumed"] = !id(rf_tx_active);
+            root["delivery_confirmed"] = false;
+      - delay: 750ms
