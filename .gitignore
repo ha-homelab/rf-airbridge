@@ -1,0 +1,13 @@
+.esphome/
+__pycache__/
+.pytest_cache/
+.venv/
+.venv-*/
+secrets.yaml
+device.yaml
+*.bin
+*.elf
+*.map
+private/
+captures/
+build/

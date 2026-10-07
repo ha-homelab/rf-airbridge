@@ -1,0 +1,12 @@
+{
+  "version": "2026.8.2",
+  "source": "https://github.com/esphome/esphome/tree/2026.8.2/esphome/components/remote_receiver",
+  "sha256": {
+    "__init__.py": "8c7e8ad66497ea2bc9d1f9143a4593b72a1214a16fb051fd5cb3d311fdb57b36",
+    "binary_sensor.py": "adc59dcedf25724866c8f5228ec06ab601a377545446e7ef94def02da9dff4a6",
+    "remote_receiver.h": "bfe20b43cbf2d1bd856a8b5de3ee5caeaa97c41d5455344004160394b8f93bda",
+    "remote_receiver.cpp": "0c6c454f6ace9e1534245f479ca49e209ef66807213e6aebb8da0f01524ee267",
+    "remote_receiver_rmt.cpp": "b9d4907c7a96c48e79d2ea103f38396a575eebaa3543e583e36a6d092bbb1e4b",
+    "LICENSE": "1f312390122725ee382f85af00e3df84f2490cd8fa61b9ea172bc6591cc0ac63"
+  }
+}
