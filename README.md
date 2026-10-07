@@ -52,6 +52,12 @@ do not require a second radio or a second capture pin.
 
 ## Hardware and starting configuration
 
+![Logical wiring of the ESP8266 NodeMCU v2 and CC1101 RF transceiver, showing SPI, shared GDO0 receive/transmit data, 3.3 V and ground](docs/images/esp8266-cc1101-wiring.svg)
+
+The connected module is a **CC1101 RF transceiver**; the motion sensors send
+their codes to it wirelessly. The diagram shows the configured signal
+connections, not the physical order of either board's header pins.
+
 The example uses `nodemcuv2` and these connections:
 
 - CC1101 SPI clock → ESP8266 GPIO14.
@@ -59,6 +65,11 @@ The example uses `nodemcuv2` and these connections:
 - CC1101 chip select → GPIO15.
 - CC1101 GDO0 → GPIO4, also labeled D2 on the NodeMCU.
 - Appropriate module power and a common ground, following the module's ratings.
+
+The illustration uses the NodeMCU **3V3** rail for a 3.3 V CC1101 module.
+Do not connect the CC1101's supply or signal pins to USB 5 V. Check the exact
+module's markings and power requirements; see the
+[TI CC1101 datasheet](https://www.ti.com/lit/ds/symlink/cc1101.pdf).
 
 GDO0 is the shared receive/transmit data wire. Confirm the physical connection
 before enabling transmission; a configuration comment alone cannot prove the
