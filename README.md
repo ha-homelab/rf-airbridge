@@ -59,6 +59,13 @@ The connected module is a **CC1101 RF transceiver**; the motion sensors send
 their codes to it wirelessly. The diagram shows the configured signal
 connections, not the physical order of either board's header pins.
 
+**Bluetooth needs separate hardware.** This ESP8266/CC1101 node has no Bluetooth
+radio. The [Bluetooth companion guide](docs/bluetooth.md) explains how to use an
+existing Home Assistant proxy, privately capture an unknown light remote, and
+distinguish receive support from the ability to control a BLE lamp. A bounded
+[capture tool](tools/capture_bluetooth.py) is included; support for a particular
+lamp must be established by real receive and transmit tests.
+
 The example uses `nodemcuv2` and these connections:
 
 - CC1101 SPI clock → ESP8266 GPIO14.
