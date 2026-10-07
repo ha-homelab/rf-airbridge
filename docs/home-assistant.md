@@ -100,6 +100,11 @@ to run that action.
 
 ## Transmit a selected code
 
+This section describes RCSwitch. For Dooya's separate 40-bit command format,
+see [Dooya transmission and the power-then-send example](dooya-transmission.md).
+Both actions share one transmitter worker and a 750 ms cooldown; a command
+received while either format is busy is rejected rather than queued.
+
 Open **Developer tools > Actions**, select `script.rf_send_code`, and provide:
 
 - **Binary code:** the exact captured bit string, with leading zeroes.

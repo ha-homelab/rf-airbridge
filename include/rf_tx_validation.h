@@ -15,4 +15,11 @@ inline bool valid_tx_request(const std::string &code, int protocol, int repeats)
   return true;
 }
 
+// Check signed API values before the encoder narrows them to the 24/8/4/4-bit
+// Dooya fields. The supplied check nibble is transmitted, not calculated here.
+inline bool valid_dooya_request(int remote_id, int channel, int button, int check, int repeats) {
+  return remote_id >= 0 && remote_id <= 0xFFFFFF && channel >= 0 && channel <= 0xFF && button >= 0 &&
+         button <= 0x0F && check >= 0 && check <= 0x0F && repeats >= 1 && repeats <= 10;
+}
+
 }  // namespace rf_bridge

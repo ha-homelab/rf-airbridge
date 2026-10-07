@@ -97,8 +97,13 @@ api:
                   then:
                     - script.execute:
                         id: rf_send_job
+                        is_dooya: false
                         code: !lambda return code;
                         protocol: !lambda return protocol;
+                        remote_id: 0
+                        channel: 0
+                        button: 0
+                        check: 0
                         repeats: !lambda return repeats;
                   else:
                     - mqtt.publish_json:
@@ -107,7 +112,9 @@ api:
                         retain: false
                         payload: |-
                           root["source"] = "${rf_source}";
+                          root["format"] = "rc_switch";
                           root["status"] = "busy";
+                          root["delivery_confirmed"] = false;
             else:
               - mqtt.publish_json:
                   topic: ${rf_transmit_result_topic}
@@ -115,33 +122,113 @@ api:
                   retain: false
                   payload: |-
                     root["source"] = "${rf_source}";
+                    root["format"] = "rc_switch";
                     root["status"] = "invalid_request";
                     root["reason"] = "Expected 8-64 binary digits, protocol 1-8, repeats 1-10";
+                    root["delivery_confirmed"] = false;
+
+    - action: send_dooya_code
+      variables:
+        remote_id: int
+        channel: int
+        button: int
+        check: int
+        repeats: int
+      then:
+        - if:
+            condition:
+              lambda: return rf_bridge::valid_dooya_request(remote_id, channel, button, check, repeats);
+            then:
+              - if:
+                  condition:
+                    not:
+                      script.is_running: rf_send_job
+                  then:
+                    - script.execute:
+                        id: rf_send_job
+                        is_dooya: true
+                        code: ""
+                        protocol: 0
+                        remote_id: !lambda return remote_id;
+                        channel: !lambda return channel;
+                        button: !lambda return button;
+                        check: !lambda return check;
+                        repeats: !lambda return repeats;
+                  else:
+                    - mqtt.publish_json:
+                        topic: ${rf_transmit_result_topic}
+                        qos: 0
+                        retain: false
+                        payload: |-
+                          root["source"] = "${rf_source}";
+                          root["format"] = "dooya";
+                          root["status"] = "busy";
+                          root["delivery_confirmed"] = false;
+            else:
+              - mqtt.publish_json:
+                  topic: ${rf_transmit_result_topic}
+                  qos: 0
+                  retain: false
+                  payload: |-
+                    root["source"] = "${rf_source}";
+                    root["format"] = "dooya";
+                    root["status"] = "invalid_request";
+                    root["reason"] = "Expected remote_id 0-16777215, channel 0-255, button/check 0-15, repeats 1-10";
+                    root["delivery_confirmed"] = false;
 
 script:
+  # Both API actions use this one worker. It remains running through the final
+  # cooldown, so a different protocol cannot bypass an active transmission.
   - id: rf_send_job
     mode: single
     parameters:
+      is_dooya: bool
       code: string
       protocol: int
+      remote_id: int
+      channel: int
+      button: int
+      check: int
       repeats: int
     then:
-      - remote_transmitter.transmit_rc_switch_raw:
-          transmitter_id: rf_transmitter
-          code: !lambda return code;
-          protocol: !lambda return esphome::remote_base::RC_SWITCH_PROTOCOLS[protocol];
-          repeat:
-            times: !lambda return repeats;
-            wait_time: 10ms
+      - if:
+          condition:
+            lambda: return is_dooya;
+          then:
+            - remote_transmitter.transmit_dooya:
+                transmitter_id: rf_transmitter
+                id: !lambda return remote_id;
+                channel: !lambda return channel;
+                button: !lambda return button;
+                check: !lambda return check;
+                repeat:
+                  times: !lambda return repeats;
+                  wait_time: 10ms
+          else:
+            - remote_transmitter.transmit_rc_switch_raw:
+                transmitter_id: rf_transmitter
+                code: !lambda return code;
+                protocol: !lambda return esphome::remote_base::RC_SWITCH_PROTOCOLS[protocol];
+                repeat:
+                  times: !lambda return repeats;
+                  wait_time: 10ms
       - mqtt.publish_json:
           topic: ${rf_transmit_result_topic}
           qos: 0
           retain: false
           payload: |-
             root["source"] = "${rf_source}";
+            root["format"] = is_dooya ? "dooya" : "rc_switch";
             root["status"] = "send_finished";
-            root["code"] = code;
-            root["protocol"] = protocol;
+            if (is_dooya) {
+              root["remote_id"] = remote_id;
+              root["channel"] = channel;
+              root["button"] = button;
+              root["check"] = check;
+            } else {
+              root["code"] = code;
+              root["protocol"] = protocol;
+            }
             root["repeats"] = repeats;
             root["receiver_resumed"] = !id(rf_tx_active);
             root["delivery_confirmed"] = false;

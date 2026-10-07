@@ -23,8 +23,9 @@ rejects other ESPHome versions until it has been rebased and tested.
   captures that the RCSwitch decoder could not recognize.
 - **A Home Assistant example:** match one exact code and increment a counter,
   with repeat suppression. No physical load is operated by the receive example.
-- **A transmit action:** send a chosen RCSwitch code through Home Assistant's
-  ESPHome integration, with input validation on both sides.
+- **Transmit actions:** send a chosen RCSwitch code or a Dooya command through
+  Home Assistant's ESPHome integration, with firmware input validation and a
+  shared busy/cooldown guard.
 - **Reception restored after transmission:** a small, version-pinned receiver
   patch reattaches the ESP8266 capture interrupt without reallocating its buffer.
 
@@ -218,6 +219,14 @@ verifying a real command.
 The [receiver interrupt patch](docs/tx-receiver-patch.md) explains why changing
 the shared pin back to input is insufficient in ESPHome 2026.8.2, and how
 `suspend()`/`resume()` restore capture without repeatedly running `setup()`.
+
+For Dooya's 40-bit command format, use `esphome.rf_send_dooya_code` with
+`remote_id`, `channel`, `button`, `check`, and `repeats`. It uses ESPHome's
+native Dooya encoder and the same guarded worker as RCSwitch, including its
+750 ms cooldown. The [Dooya guide](docs/dooya-transmission.md) describes the
+field bounds and provides a synthetic example that powers a receiver, waits
+three seconds, and sends the selected command. This adds transmission; the
+existing MQTT receive decoder and timing remain unchanged.
 
 ## Scope and limitations
 
