@@ -1,0 +1,18 @@
+# Generic HA action list: power a receiver, wait for startup, then send.
+# This is not a complete automation and does not install a schedule.
+# Every RF value below is synthetic. Replace the whole tuple with the private
+# captured Open or Close command for your intended motor before using it.
+# A finished send does not acknowledge motor movement. The shared RF worker
+# remains busy for 750 ms after completion; account for that between commands.
+- action: switch.turn_on
+  target:
+    entity_id: switch.example_curtain_power
+- delay:
+    seconds: 3
+- action: esphome.rf_send_dooya_code
+  data:
+    remote_id: 1193046 # 0x123456, synthetic identifier.
+    channel: 1
+    button: 1
+    check: 2
+    repeats: 3

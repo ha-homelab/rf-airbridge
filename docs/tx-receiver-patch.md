@@ -89,6 +89,11 @@ integer rounding. The upstream runtime treats every non-`0` character as `1`,
 so accepting an unchecked string is unsafe. An invalid protocol index must never
 index `RC_SWITCH_PROTOCOLS`.
 
+The separate [Dooya action](dooya-transmission.md) validates a 24-bit remote
+identifier, 8-bit channel, 4-bit button and check fields, and 1–10 repeats.
+Both command families enter the same `mode: single` worker, which uses these
+shared transmit hooks and remains busy through a final 750 ms cooldown.
+
 Only the validated call should execute the transmit action. Keep all timing and
 mode-change hooks synchronous; do not insert a delayed action between entering
 TX and the actual send. After transmission, always restore RX before publishing

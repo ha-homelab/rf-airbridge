@@ -18,6 +18,7 @@ SOURCE = r"""
 
 int main() {
   using rf_bridge::valid_tx_request;
+  using rf_bridge::valid_dooya_request;
 
   // Every supported width/protocol/repeat combination must remain usable.
   for (size_t width = 8; width <= 64; ++width) {
@@ -71,6 +72,39 @@ int main() {
     assert(valid_tx_request(bits, 1 + random() % 8, 1 + random() % 10));
     bits[random() % width] = static_cast<char>(random() % 48); // Always outside '0'/'1'.
     assert(!valid_tx_request(bits, 1, 1));
+  }
+
+  // Dooya encodes a 24-bit remote ID, 8-bit channel, and two 4-bit fields.
+  // Exercise the exact narrowing boundaries and every nibble value.
+  for (int remote : {0, 1, 0x7FFFFF, 0x800000, 0xFFFFFE, 0xFFFFFF})
+    for (int channel : {0, 1, 127, 128, 254, 255})
+      for (int button = 0; button <= 15; ++button)
+        for (int check = 0; check <= 15; ++check)
+          for (int repeats : {1, 10})
+            assert(valid_dooya_request(remote, channel, button, check, repeats));
+
+  for (int remote : {INT_MIN, -1, 0x1000000, INT_MAX})
+    assert(!valid_dooya_request(remote, 1, 1, 1, 3));
+  for (int channel : {INT_MIN, -1, 256, INT_MAX})
+    assert(!valid_dooya_request(0x123456, channel, 1, 1, 3));
+  for (int nibble : {INT_MIN, -1, 16, 255, INT_MAX}) {
+    assert(!valid_dooya_request(0x123456, 1, nibble, 1, 3));
+    assert(!valid_dooya_request(0x123456, 1, 1, nibble, 3));
+  }
+  for (int repeats : {INT_MIN, -1, 0, 11, INT_MAX})
+    assert(!valid_dooya_request(0x123456, 1, 1, 1, repeats));
+
+  for (unsigned iteration = 0; iteration < 10000; ++iteration) {
+    const int remote = random() & 0xFFFFFF;
+    const int channel = random() & 0xFF;
+    const int button = random() & 0x0F;
+    const int check = random() & 0x0F;
+    const int repeats = 1 + random() % 10;
+    assert(valid_dooya_request(remote, channel, button, check, repeats));
+    assert(!valid_dooya_request(remote | 0x1000000, channel, button, check, repeats));
+    assert(!valid_dooya_request(remote, channel | 0x100, button, check, repeats));
+    assert(!valid_dooya_request(remote, channel, button | 0x10, check, repeats));
+    assert(!valid_dooya_request(remote, channel, button, check | 0x10, repeats));
   }
 }
 """
