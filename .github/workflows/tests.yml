@@ -43,8 +43,6 @@ jobs:
     name: Compile ESPHome 2026.8.2 example
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    container:
-      image: ghcr.io/esphome/esphome:2026.8.2
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
@@ -56,4 +54,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Compile example with dummy credentials
-        run: python tools/validate_firmware.py
+        # Start the container after host-level monitoring is active.
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --entrypoint python \
+            ghcr.io/esphome/esphome:2026.8.2 \
+            tools/validate_firmware.py
