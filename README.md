@@ -259,12 +259,26 @@ The [CI workflow](.github/workflows/tests.yml) runs the host tests and a separat
 example-firmware build using `ghcr.io/esphome/esphome:2026.8.2`, with read-only
 repository permissions and no device credentials.
 
-Host tests do not replace a full ESPHome firmware build or a hardware test.
-Deployment verification should establish, separately: the existing motion
-entities still work; real RF events reach MQTT; the HA counter consumes the
-chosen event; a selected transmit command completes; and another real frame is
-received after transmission. End-to-end hardware verification is pending in
-this initial documentation and must not be inferred from the host tests.
+The original ESP8266/CC1101 node has now been upgraded by OTA to ESPHome
+2026.8.2, reconnected to Home Assistant, and published real radio events over
+MQTT. All 15 existing motion sensor definitions were preserved. A 180-second
+observation recorded 233 decoded events across 11 distinct protocol/code pairs,
+including 24 frames absent from the configured sensor-code set. All 233 event
+IDs were unique and none of those events was retained. Brief raw learning
+produced two raw-frame events and was then disabled again.
+
+See [live validation on 2026-10-06](docs/live-validation.md) for observed evidence
+and its limits. The HA counter consumed a synthetic matching MQTT event; the
+natural RF capture was checked separately. The transmit script's package-merge
+selector issue was fixed and checked on the installed HA configuration. Invalid
+requests were rejected, and a valid send completed with the receiver restored.
+A separate 120-second transmit-validation capture recorded 198 natural RF
+frames before the send and 198 after it, with the same boot ID and no reboot.
+
+Delivery to an independent RF appliance was **not tested**. Software transmit
+completion and receiver recovery must not be treated as proof that a target
+appliance received or acted on the signal. Host tests, firmware compilation,
+and live hardware checks establish different things.
 
 To roll back, restore the private known-working configuration and firmware.
 Remove the new HA example package if desired, then reload the affected domains
