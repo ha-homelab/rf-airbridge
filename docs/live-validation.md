@@ -116,10 +116,11 @@ A valid synthetic **64-bit code**, **protocol 1**, and **3 repeats** was then
 sent through `script.rf_send_code`. The firmware published `send_finished`
 with `receiver_resumed: true` and `delivery_confirmed: false`.
 
-After this send, **87 natural RF receive frames** were observed within roughly
-20 seconds. The first was observed about **3.927 seconds after the send**. The
-receive events had the same `boot_id` before and after transmission: reception
-recovered without rebooting the node.
+The separate **120-second transmit-validation capture** recorded **198 natural
+RF receive frames before the send and 198 after it**, one transmit result, and
+zero retained messages. The first post-send receive event was observed about
+**3.927 seconds after the send**. The receive events had the same `boot_id`
+before and after transmission: reception recovered without rebooting the node.
 
 The device logged one API-operation warning of **334 ms** during the
 synchronous send. The send path completed and real reception resumed; the

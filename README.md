@@ -272,8 +272,8 @@ and its limits. The HA counter consumed a synthetic matching MQTT event; the
 natural RF capture was checked separately. The transmit script's package-merge
 selector issue was fixed and checked on the installed HA configuration. Invalid
 requests were rejected, and a valid send completed with the receiver restored.
-Another 87 natural RF frames were observed within roughly 20 seconds after the
-send, with the same boot ID and no reboot.
+A separate 120-second transmit-validation capture recorded 198 natural RF
+frames before the send and 198 after it, with the same boot ID and no reboot.
 
 Delivery to an independent RF appliance was **not tested**. Software transmit
 completion and receiver recovery must not be treated as proof that a target
