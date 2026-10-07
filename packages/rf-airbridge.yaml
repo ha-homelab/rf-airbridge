@@ -40,7 +40,7 @@ remote_receiver:
     then:
       - lambda: |-
           static rf_bridge::Receiver bridge("${rf_source}", "${rf_received_topic}", "${rf_raw_topic}");
-          bridge.on_receive(x, id(rf_mqtt), id(rf_raw_learning).state, id(rf_tx_active));
+          bridge.on_receive(x, *id(rf_mqtt), id(rf_raw_learning).state, id(rf_tx_active));
 
 globals:
   - id: rf_tx_active

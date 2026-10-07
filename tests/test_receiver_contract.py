@@ -66,6 +66,11 @@ inline uint32_t random_uint32() { static uint32_t value = 0x12340000; return val
 """
 
 HARNESS = r"""
+// ESPHome declares HAL functions before defining compatibility macros in the
+// generated main.cpp. Preserve that order so this reproduces the real build's
+// function-like millis macro without corrupting the stub function declaration.
+#include "esphome/core/hal.h"
+#define millis() esphome::millis()
 #include "rf_receiver.h"
 #include <cassert>
 #include <iostream>

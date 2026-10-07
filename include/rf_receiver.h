@@ -71,7 +71,7 @@ class Receiver {
         binary[i] = (value & (uint64_t{1} << (bits - i - 1))) ? '1' : '0';
       binary[bits] = '\0';
 
-      this->begin_payload_("rc_switch", esphome::millis());
+      this->begin_payload_("rc_switch", (esphome::millis)());
       this->append_(",\"protocol\":%u,\"bits\":%u,\"code\":\"%s\",\"value\":\"%" PRIu64 "\"}",
                     static_cast<unsigned>(protocol), static_cast<unsigned>(bits), binary, value);
       return this->publish_(mqtt, this->decoded_topic_, ReceiveResult::DECODED_PUBLISHED);
@@ -88,7 +88,7 @@ class Receiver {
         return ReceiveResult::RAW_OUT_OF_BOUNDS;
     }
 
-    const uint32_t now = esphome::millis();
+    const uint32_t now = (esphome::millis)();
     if (this->raw_attempted_ && static_cast<uint32_t>(now - this->last_raw_attempt_ms_) < RAW_INTERVAL_MS)
       return ReceiveResult::RAW_RATE_LIMITED;
     this->raw_attempted_ = true;

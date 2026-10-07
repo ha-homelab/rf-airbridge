@@ -114,6 +114,9 @@ The script validates its inputs and calls `esphome.rf_send_rf_code`. In YAML,
 quote literal codes and pass `code`, `protocol`, and optionally `repeats` under
 the script action's `data` mapping. Invalid code lengths, nonbinary text, and
 out-of-range protocol/repeat values fail before the ESPHome action is called.
+Home Assistant records the validation stop in the script trace; its top-level
+service call can still return normally. Inspect that trace when testing invalid
+inputs instead of relying on the HTTP response alone.
 
 The native action in this project has no application-level response. A completed
 Home Assistant call means the request was dispatched; it does **not** confirm
