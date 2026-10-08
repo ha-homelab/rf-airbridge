@@ -63,3 +63,15 @@ uv pip compile requirements-test.in --generate-hashes --universal --python-versi
 ```
 
 Run the documented tests in a fresh virtual environment after updating a lock.
+
+## Source releases
+
+Use immutable Semantic Versioning tags (`vMAJOR.MINOR.PATCH`) for source snapshots.
+The first source release is `v0.1.0`; do not move an existing release tag.
+These versions identify this repository’s source, configuration examples, tests and documentation. They are independent of the required ESPHome version and do not provide a precompiled firmware image. Compile for the documented board and validate the installation before operating a physical load.
+
+Before tagging, identify the exact reviewed commit and verify its required CI
+checks. Each release must link that commit and describe changes, upgrade
+implications and security impact, including known limits. GitHub source archives
+allow users to obtain the exact tagged tree; preserve all bundled licenses and
+upstream notices. Report defects against the source tag or full commit ID.

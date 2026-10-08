@@ -4,7 +4,7 @@
 
 The project provides ESP8266/CC1101 RF reception and transmission with ESPHome and Home Assistant.
 
-RF input is unauthenticated and replayable. A matching RF code must not be treated as proof of identity. MQTT and Home Assistant commands can cause radio transmission; restrict their publishers and keep broker credentials outside this repository. Preserve bounded captures, input validation, cooldown and receiver restoration.
+RF input is unauthenticated and replayable. A matching RF code must not be treated as proof of identity. MQTT carries RF observations; transmit requests use the native ESPHome API through Home Assistant. Restrict MQTT publishers and API access, and keep their credentials outside this repository. Preserve bounded captures, input validation, cooldown and receiver restoration.
 
 ## Source and operating documentation
 
