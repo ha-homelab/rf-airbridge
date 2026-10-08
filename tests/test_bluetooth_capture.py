@@ -39,6 +39,9 @@ class Connection:
     async def send_json(self, message):
         self.sent.append(message)
 
+    def get_extra_info(self, name):
+        return object() if name == "ssl_object" else None
+
 
 class TestCapture(unittest.IsolatedAsyncioTestCase):
     async def run_capture(self, output, messages):
@@ -48,6 +51,7 @@ class TestCapture(unittest.IsolatedAsyncioTestCase):
         http = types.SimpleNamespace(
             ClientSession=lambda **kwargs: session,
             ClientTimeout=lambda **kwargs: None,
+            TCPConnector=lambda **kwargs: None,
         )
         with contextlib.redirect_stdout(io.StringIO()):
             await capture._capture(http, "https://ha.example", "private-token", output, 0.025)

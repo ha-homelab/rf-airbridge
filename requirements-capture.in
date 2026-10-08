@@ -1,0 +1,3 @@
+# Optional read-only Bluetooth capture; exact certificate-chain inspection.
+aiohttp==3.14.4
+cryptography==50.0.2

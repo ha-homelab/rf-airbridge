@@ -18,7 +18,7 @@ and project documentation.
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --require-hashes -r requirements-test.txt
+python -m pip install --require-hashes --only-binary=:all: -r requirements-test.txt -r requirements-capture.txt
 python -m unittest discover -s tests -v
 ```
 
@@ -60,6 +60,7 @@ a missing archive. Review dependency updates and regenerate the locks with:
 
 ```sh
 uv pip compile requirements-test.in --generate-hashes --universal --python-version 3.12 --output-file requirements-test.txt
+uv pip compile requirements-capture.in --generate-hashes --universal --python-version 3.12 --output-file requirements-capture.txt
 ```
 
 Run the documented tests in a fresh virtual environment after updating a lock.
