@@ -15,16 +15,23 @@ RF input is unauthenticated and replayable. A matching RF code must not be treat
 
 ## Bluetooth capture HTTPS profile
 
-The optional capture client uses standard aiohttp WSS verification; it does
-not supply a custom SSL context or disable certificate/hostname checks. Its
+The optional capture client retains standard aiohttp WSS CA and hostname
+verification, then checks exact public-key sizes on the same connection. Its
 [supported runtime profile and local verification command](bluetooth.md#capture-from-home-assistant)
-require CPython 3.12+, minimum TLS 1.2 and OpenSSL security level 2 or higher.
-On CPython 3.12.14 / aiohttp 3.14.4 / OpenSSL 3.5.8, the actual `_capture`
-transport rejects trusted RSA 1024-bit leaf, intermediate and root certificates
+requires CPython 3.12+ and the pinned capture dependencies. The owned context
+enforces minimum TLS 1.2 and OpenSSL security level 2 without lowering stronger
+defaults or expanding the selected cipher list. OpenSSL level 2 alone can
+accept an RSA 2047-bit trust anchor; the additional check rejects that boundary.
+On CPython 3.12.14 / aiohttp 3.14.4 / cryptography 50.0.2 / OpenSSL 3.5.8,
+the actual `_capture` transport rejects trusted RSA 1024- and 2047-bit leaf,
+intermediate and root certificates
 before the WebSocket HTTP request or administrator-token message, under TLS
-1.2 and 1.3. Strong RSA 2048-bit fixtures complete authentication and both
+1.2 and 1.3. Strong RSA 2048-bit and EC 256-bit fixtures complete authentication and both
 subscriptions. Each synthetic chain was separately verified by a test-only
 lower-security client to distinguish client rejection from a broken server.
+The root is omitted from the offered chain, so these tests also exercise the
+selected trust anchor. Unknown issuers and wrong hostnames still fail. The
+client uses neither a separate TLS preflight nor global TLS monkey patches.
 
 A failed connection may leave the empty, owner-only output file created by
 the capture tool; it contains no captured payload. These are local synthetic
@@ -37,6 +44,7 @@ controls; this HTTPS result does not make those transports confidential.
 - [tests/test_tx_validation.py](../tests/test_tx_validation.py)
 - [tests/test_receiver_patch.py](../tests/test_receiver_patch.py)
 - [tests/test_shared_transmitter.py](../tests/test_shared_transmitter.py)
+- [tests/test_capture_tls.py](../tests/test_capture_tls.py)
 
 Run the documented commands in [CONTRIBUTING.md](../CONTRIBUTING.md) and the
 [CI workflow](../.github/workflows/tests.yml). Preserve negative tests for rejected inputs,

@@ -58,21 +58,38 @@ captures and keys out of this public repository.
 Assistant's scanner inventory and advertisement stream for a bounded period.
 It does not enable adapters, install integrations, pair devices, or transmit
 commands. Use a Home Assistant administrator access token because these
-WebSocket commands require administrative access. The Python environment needs
-`aiohttp` (available in the ESPHome environment used by this project).
+WebSocket commands require administrative access. Use a separate CPython 3.12+
+environment for the pinned capture dependencies; do not install them into a
+running Home Assistant or ESPHome environment:
 
-For HTTPS capture, use CPython 3.12 or newer with the normal verified aiohttp
-TLS context, OpenSSL security level at least 2, and minimum TLS 1.2. The
-validated combination is CPython 3.12.14, aiohttp 3.14.4 and OpenSSL 3.5.8.
-Older runtimes, vendor-weakened OpenSSL policies and custom TLS monkey patches
-are outside this evidence. Check the active interpreter before supplying a
-token; this command only reads local runtime settings:
+```sh
+python3 -m venv .venv-capture
+. .venv-capture/bin/activate
+python -m pip install --require-hashes --only-binary=:all: -r requirements-capture.txt
+```
+
+HTTPS capture retains standard CA and hostname verification, then checks every
+certificate in the verified chain, including the trust anchor, on that same
+connection before sending the WebSocket HTTP request. It requires RSA keys of
+at least 2048 bits, EC keys of at least 224 bits, DSA p/q of at least 2048/224
+bits, or Ed25519/Ed448. OpenSSL may impose stronger restrictions. TLS is at
+least 1.2 and security level at least 2; stricter defaults and existing cipher
+selection are preserved. OpenSSL security level 2 alone can accept RSA 2047,
+so inspecting only that setting is insufficient.
+
+The tested profile is CPython 3.12.14, aiohttp 3.14.4, cryptography 50.0.2 and
+OpenSSL 3.5.8. CPython 3.12 uses its private verified-chain accessor; newer
+versions use the public accessor when available. A missing accessor or
+unsupported key/chain representation fails closed. Older interpreters,
+alternative Python implementations and monkey-patched TLS are not supported.
+This command only reads local runtime settings:
 
 ```sh
 python - <<'PYTHON'
-import ssl, sys, aiohttp
-context = ssl.create_default_context()
-print(sys.version, aiohttp.__version__, ssl.OPENSSL_VERSION, sep="\n")
+import ssl, sys, aiohttp, cryptography
+from tools.capture_bluetooth import verified_context
+context = verified_context()
+print(sys.version, aiohttp.__version__, cryptography.__version__, ssl.OPENSSL_VERSION, sep="\n")
 print("security_level", context.security_level, "minimum_tls", context.minimum_version.name)
 assert sys.version_info >= (3, 12)
 assert context.security_level >= 2
@@ -82,6 +99,10 @@ PYTHON
 ```
 
 Use the actual HTTPS endpoint and a certificate trusted by this interpreter.
+Normal `SSL_CERT_FILE`/`SSL_CERT_DIR` CA selection is retained. As before,
+the capture session does not consume environment proxy settings. An HTTPS
+redirect that finishes on plaintext HTTP is rejected before sending the
+administrator token; its unauthenticated HTTP upgrade may already have run.
 Do not disable CA or hostname verification to make a connection succeed.
 
 ```sh

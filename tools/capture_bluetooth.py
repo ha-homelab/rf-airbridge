@@ -7,8 +7,69 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import ssl
 import sys
 from urllib.parse import urlsplit
+
+
+def _check_verified_keys(connection):
+    """Inspect the chain already verified on this connection, including its anchor."""
+    from cryptography import x509
+    from cryptography.exceptions import UnsupportedAlgorithm
+    from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
+
+    get_chain = getattr(connection, "get_verified_chain", None)
+    if not callable(get_chain):
+        # CPython 3.12 exposes the verified chain on the underlying SSL object.
+        get_chain = getattr(getattr(connection, "_sslobj", None), "get_verified_chain", None)
+    if not callable(get_chain):
+        raise ssl.SSLError("TLS runtime does not expose its verified certificate chain")
+    chain = get_chain()
+    if not isinstance(chain, list) or not chain:
+        raise ssl.SSLError("TLS peer has no verified certificate chain")
+    for certificate in chain:
+        if isinstance(certificate, bytes):
+            der = certificate
+        else:
+            encode = getattr(certificate, "public_bytes", None)
+            pem = encode() if callable(encode) else None
+            if not isinstance(pem, str):
+                raise ssl.SSLError("TLS runtime returned an unsupported certificate format")
+            der = ssl.PEM_cert_to_DER_cert(pem)
+        try:
+            key = x509.load_der_x509_certificate(der).public_key()
+        except (ValueError, UnsupportedAlgorithm):
+            raise ssl.SSLError("TLS certificate public key cannot be verified") from None
+        if isinstance(key, rsa.RSAPublicKey):
+            accepted = key.public_numbers().n.bit_length() >= 2048
+        elif isinstance(key, ec.EllipticCurvePublicKey):
+            accepted = key.key_size >= 224
+        elif isinstance(key, dsa.DSAPublicKey):
+            parameters = key.public_numbers().parameter_numbers
+            accepted = parameters.p.bit_length() >= 2048 and parameters.q.bit_length() >= 224
+        else:
+            accepted = isinstance(key, (ed25519.Ed25519PublicKey, ed448.Ed448PublicKey))
+        if not accepted:
+            raise ssl.SSLError("TLS certificate key is below the supported security minimum")
+
+
+class _VerifiedTLS(ssl.SSLObject):
+    def do_handshake(self):
+        super().do_handshake()
+        _check_verified_keys(self)
+
+
+def verified_context():
+    """Preserve default trust/hostname checks and check exact keys before HTTP."""
+    context = ssl.create_default_context()
+    context.minimum_version = max(context.minimum_version, ssl.TLSVersion.TLSv1_2)
+    if context.security_level < 2:
+        selected = [cipher["name"] for cipher in context.get_ciphers()
+                    if cipher["protocol"] != "TLSv1.3"]
+        context.set_ciphers(":".join([*selected, "@SECLEVEL=2"]))
+    context.set_alpn_protocols(["http/1.1"])
+    context.sslobject_class = _VerifiedTLS
+    return context
 
 
 def validate_url(value):
@@ -41,8 +102,12 @@ async def _capture(aiohttp, url, token, output, seconds):
     fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     events = 0
     with os.fdopen(fd, "w") as stream:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+        connector = aiohttp.TCPConnector(ssl=verified_context())
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30),
+                                         connector=connector, trust_env=False) as session:
             async with session.ws_connect(url + "/api/websocket", heartbeat=20) as ws:
+                if urlsplit(url).scheme == "https" and ws.get_extra_info("ssl_object") is None:
+                    raise RuntimeError("Home Assistant HTTPS redirect lost TLS protection")
                 greeting = await asyncio.wait_for(ws.receive_json(), 15)
                 if greeting.get("type") != "auth_required":
                     raise RuntimeError("Unexpected Home Assistant authentication greeting")
