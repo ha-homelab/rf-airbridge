@@ -61,6 +61,29 @@ commands. Use a Home Assistant administrator access token because these
 WebSocket commands require administrative access. The Python environment needs
 `aiohttp` (available in the ESPHome environment used by this project).
 
+For HTTPS capture, use CPython 3.12 or newer with the normal verified aiohttp
+TLS context, OpenSSL security level at least 2, and minimum TLS 1.2. The
+validated combination is CPython 3.12.14, aiohttp 3.14.4 and OpenSSL 3.5.8.
+Older runtimes, vendor-weakened OpenSSL policies and custom TLS monkey patches
+are outside this evidence. Check the active interpreter before supplying a
+token; this command only reads local runtime settings:
+
+```sh
+python - <<'PYTHON'
+import ssl, sys, aiohttp
+context = ssl.create_default_context()
+print(sys.version, aiohttp.__version__, ssl.OPENSSL_VERSION, sep="\n")
+print("security_level", context.security_level, "minimum_tls", context.minimum_version.name)
+assert sys.version_info >= (3, 12)
+assert context.security_level >= 2
+assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
+assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
+PYTHON
+```
+
+Use the actual HTTPS endpoint and a certificate trusted by this interpreter.
+Do not disable CA or hostname verification to make a connection succeed.
+
 ```sh
 mkdir -p captures
 chmod 700 captures
@@ -73,8 +96,10 @@ python tools/capture_bluetooth.py \
 unset HA_TOKEN
 ```
 
-The command uses Bash's `read` syntax. Prefer HTTPS when accessing Home
-Assistant outside a trusted local connection. The output is created with mode
+The command uses Bash's `read` syntax. Prefer HTTPS, including on a local
+network. The HTTP example has no transport encryption or server authentication and exposes the administrator token to
+anyone able to observe that connection; restrict it to an explicitly trusted,
+isolated recovery/test network. The output is created with mode
 0600 and existing files are never overwritten. The ignored `captures/`
 directory is for private local use. Captures contain nearby device identifiers
 and payloads; do not attach them unredacted to public issues.
