@@ -13,6 +13,25 @@ RF input is unauthenticated and replayable. A matching RF code must not be treat
 - [docs/tx-receiver-patch.md](../docs/tx-receiver-patch.md)
 - [docs/home-assistant.md](../docs/home-assistant.md)
 
+## Bluetooth capture HTTPS profile
+
+The optional capture client uses standard aiohttp WSS verification; it does
+not supply a custom SSL context or disable certificate/hostname checks. Its
+[supported runtime profile and local verification command](bluetooth.md#capture-from-home-assistant)
+require CPython 3.12+, minimum TLS 1.2 and OpenSSL security level 2 or higher.
+On CPython 3.12.14 / aiohttp 3.14.4 / OpenSSL 3.5.8, the actual `_capture`
+transport rejects trusted RSA 1024-bit leaf, intermediate and root certificates
+before the WebSocket HTTP request or administrator-token message, under TLS
+1.2 and 1.3. Strong RSA 2048-bit fixtures complete authentication and both
+subscriptions. Each synthetic chain was separately verified by a test-only
+lower-security client to distinguish client rejection from a broken server.
+
+A failed connection may leave the empty, owner-only output file created by
+the capture tool; it contains no captured payload. These are local synthetic
+TLS tests, not a physical radio, deployed Home Assistant or firmware test.
+Plain HTTP, MQTT and unauthenticated RF need their documented network/access
+controls; this HTTPS result does not make those transports confidential.
+
 ## Regression evidence
 
 - [tests/test_tx_validation.py](../tests/test_tx_validation.py)
