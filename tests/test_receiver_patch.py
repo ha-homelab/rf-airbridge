@@ -1,6 +1,7 @@
 """Compile the actual ESP8266 receiver patch against small GPIO/clock doubles."""
 
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
@@ -8,6 +9,10 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SANITIZER_FLAGS = (
+    ["-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g", "-O1"]
+    if os.environ.get("RF_CPP_SANITIZERS") == "1" else []
+)
 
 STUB = r"""
 #pragma once
@@ -187,7 +192,7 @@ class ReceiverPatchTest(unittest.TestCase):
             source.write_text(TEST)
             output = directory / "test"
             build = subprocess.run(
-                [compiler, "-std=c++17", "-DUSE_ESP8266", "-I", str(directory), "-I",
+                [compiler, *SANITIZER_FLAGS, "-std=c++17", "-DUSE_ESP8266", "-I", str(directory), "-I",
                  str(ROOT / "components/remote_receiver"), str(source), "-o", str(output)],
                 capture_output=True, text=True,
             )

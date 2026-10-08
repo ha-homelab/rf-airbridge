@@ -39,3 +39,14 @@ test assertions enabled, resolve new warnings, and document any remaining
 warning with its reason and scope. Do not suppress a real security finding to
 obtain a passing check. Wait for required checks and independent review before
 merging; do not use an administrator bypass.
+
+The native receiver and transmitter harnesses support AddressSanitizer and
+UndefinedBehaviorSanitizer with GCC/Clang:
+
+```bash
+RF_CPP_SANITIZERS=1 python -m unittest discover -s tests -v
+```
+
+Host CI enables both sanitizers and retains C++ assertions. It exercises the
+actual receiver patch, bridge serialization and transmit validator with hardware
+doubles; it does not instrument a running ESP8266 or prove radio behavior.

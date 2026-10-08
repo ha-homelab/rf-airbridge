@@ -27,7 +27,7 @@ upstream service, hardware model or production deployment.
 
 ## Remaining security assessment
 
-Review the vendored C++ receiver with memory-safety analysis and document its result. RF replay and third-party ESPHome transport policies need an explicit applicability assessment for cryptography criteria.
+The existing native receiver, serialization and TX-validation harnesses run under AddressSanitizer and UndefinedBehaviorSanitizer in host CI, with C++ assertions enabled. All 24 host tests also passed locally with sanitizers on 2026-10-08. This covers the exercised host paths with hardware doubles; it does not instrument a live ESP8266 or certify RF behavior. RF replay and third-party ESPHome transport policies need an explicit applicability assessment for cryptography criteria.
 
 Report new issues through [SECURITY.md](../SECURITY.md). An OpenSSF assessment
 records evidence and applicability; it is not a guarantee that a system is safe.
