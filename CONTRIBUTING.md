@@ -18,7 +18,7 @@ and project documentation.
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install -r requirements-test.txt
+python -m pip install --require-hashes -r requirements-test.txt
 python -m unittest discover -s tests -v
 ```
 
@@ -50,3 +50,16 @@ RF_CPP_SANITIZERS=1 python -m unittest discover -s tests -v
 Host CI enables both sanitizers and retains C++ assertions. It exercises the
 actual receiver patch, bridge serialization and transmit validator with hardware
 doubles; it does not instrument a running ESP8266 or prove radio behavior.
+
+## Reproducible Python dependencies
+
+The `.in` files declare direct dependencies. The corresponding `.txt` files pin
+all resolved dependencies and approved archive SHA-256 hashes across supported
+platforms. Install with `--require-hashes`; do not remove this check to work around
+a missing archive. Review dependency updates and regenerate the locks with:
+
+```sh
+uv pip compile requirements-test.in --generate-hashes --universal --python-version 3.12 --output-file requirements-test.txt
+```
+
+Run the documented tests in a fresh virtual environment after updating a lock.

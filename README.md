@@ -259,7 +259,7 @@ Host tests require Python 3.12 and a C++17 compiler:
 
 ```sh
 python3.12 -m venv .venv-test
-.venv-test/bin/python -m pip install -r requirements-test.txt
+.venv-test/bin/python -m pip install --require-hashes -r requirements-test.txt
 .venv-test/bin/python -m unittest discover -s tests -v
 ```
 

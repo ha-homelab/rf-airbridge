@@ -1,0 +1,3 @@
+# Host-side Home Assistant template tests. Firmware builds pin ESPHome separately.
+Jinja2==3.1.6
+PyYAML==6.0.3
