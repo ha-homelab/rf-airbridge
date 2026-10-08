@@ -35,7 +35,7 @@ jobs:
       - name: Check native test compiler
         run: c++ --version
       - name: Install test dependencies
-        run: python -m pip install -r requirements-test.txt
+        run: python -m pip install --require-hashes -r requirements-test.txt
       - name: Run host tests with native memory-safety checks
         env:
           RF_CPP_SANITIZERS: '1'
