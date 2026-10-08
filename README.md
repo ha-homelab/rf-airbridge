@@ -325,3 +325,9 @@ local runtime modifications remain GPLv3. See the retained
 The root MIT license does not relicense the ESPHome runtime or make the combined
 firmware MIT-only. Distributing firmware that includes the GPLv3 runtime requires
 compliance with GPLv3, including the applicable corresponding-source obligations.
+
+## Project maintenance
+
+See [contribution and test requirements](CONTRIBUTING.md), the
+[security reporting policy](SECURITY.md), [security design](docs/security-design.md),
+and the [OpenSSF evidence and remaining criteria](docs/openssf-evidence.md).
