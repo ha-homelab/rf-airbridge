@@ -1,6 +1,7 @@
 """Exercise the actual TX input validator at the wire-format boundaries."""
 
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
@@ -8,6 +9,10 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SANITIZER_FLAGS = (
+    ["-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g", "-O1"]
+    if os.environ.get("RF_CPP_SANITIZERS") == "1" else []
+)
 
 SOURCE = r"""
 #include "rf_tx_validation.h"
@@ -121,7 +126,7 @@ class TransmitValidationTest(unittest.TestCase):
             output = directory / "test"
             source.write_text(SOURCE)
             build = subprocess.run(
-                [compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I",
+                [compiler, *SANITIZER_FLAGS, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I",
                  str(ROOT / "include"), str(source), "-o", str(output)],
                 capture_output=True, text=True,
             )

@@ -7,6 +7,7 @@ delivery policy. Compile the actual ESPHome firmware separately.
 
 import json
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +15,10 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SANITIZER_FLAGS = (
+    ["-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g", "-O1"]
+    if os.environ.get("RF_CPP_SANITIZERS") == "1" else []
+)
 
 DECODER_DOUBLE = r"""
 #pragma once
@@ -189,7 +194,7 @@ class ReceiverContractTest(unittest.TestCase):
             path.write_text(content)
         binary = root / "receiver-test"
         subprocess.run(
-            [compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", str(root),
+            [compiler, *SANITIZER_FLAGS, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", str(root),
              "-I", str(ROOT / "include"), str(root / "test.cpp"), "-o", str(binary)],
             check=True, capture_output=True, text=True,
         )
