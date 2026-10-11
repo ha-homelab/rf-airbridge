@@ -19,6 +19,9 @@ rejects other ESPHome versions until it has been rebased and tested.
 
 - **Decoded RF events:** `rf/received` contains protocol, exact binary code,
   bit length, and observation metadata. Leading zeroes are preserved.
+- **RM433 button events:** a bounded short-pulse decoder publishes distinct
+  `rm433` events and suppresses repeated packets from one press. Set the device
+  input filter to `100us` as described in the [receive guide](docs/rx-mqtt.md#sonoff-rm433-short-pulse-frames).
 - **Optional raw learning:** an off-by-default diagnostic switch exposes bounded
   captures that the RCSwitch decoder could not recognize.
 - **A Home Assistant example:** match one exact code and increment a counter,

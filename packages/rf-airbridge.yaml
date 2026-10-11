@@ -7,6 +7,7 @@ substitutions:
 
 esphome:
   includes:
+    - ${rf_airbridge_path}/include/rm433_protocol.h
     - ${rf_airbridge_path}/include/rf_receiver.h
     - ${rf_airbridge_path}/include/rf_tx_validation.h
 

@@ -3,6 +3,7 @@
 #include "esphome/components/remote_base/rc_switch_protocol.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
+#include "rm433_protocol.h"
 
 #include <cinttypes>
 #include <cstdarg>
@@ -15,6 +16,7 @@ namespace rf_bridge {
 
 enum class ReceiveResult {
   SUPPRESSED,
+  REPEAT_SUPPRESSED,
   OFFLINE,
   INVALID_CONFIGURATION,
   UNDECODED,
@@ -52,6 +54,30 @@ class Receiver {
       return ReceiveResult::INVALID_CONFIGURATION;
     if (!mqtt.is_connected())
       return ReceiveResult::OFFLINE;
+
+    uint32_t rm433_code = 0;
+    uint32_t rm433_pulse = 0;
+    if (decode_rm433_24(timings, rm433_code, rm433_pulse)) {
+      const uint32_t now = (esphome::millis)();
+      const bool repeat = this->rm433_seen_ && this->rm433_last_code_ == rm433_code &&
+                          static_cast<uint32_t>(now - this->rm433_last_ms_) < 350;
+      this->rm433_seen_ = true;
+      this->rm433_last_code_ = rm433_code;
+      this->rm433_last_ms_ = now;
+      if (repeat)
+        return ReceiveResult::REPEAT_SUPPRESSED;
+      char binary[25];
+      for (uint8_t bit = 0; bit < 24; ++bit)
+        binary[bit] = (rm433_code & (uint32_t{1} << (23 - bit))) ? '1' : '0';
+      binary[24] = '\0';
+      // A separate format prevents callers from replaying this code with
+      // send_rf_code's incompatible stock 350 us protocol-1 timing.
+      this->begin_payload_("rm433", now);
+      this->append_(",\"encoding\":\"rc_switch_1\",\"bits\":24,\"code\":\"%s\","
+                    "\"value\":\"%" PRIu32 "\",\"pulse_length_us\":%" PRIu32 "}",
+                    binary, rm433_code, rm433_pulse);
+      return this->publish_(mqtt, this->decoded_topic_, ReceiveResult::DECODED_PUBLISHED);
+    }
 
     esphome::remote_base::RemoteReceiveData input(
         timings, this->tolerance_percent_, esphome::remote_base::TOLERANCE_MODE_PERCENTAGE);
@@ -171,9 +197,12 @@ class Receiver {
   uint32_t boot_high_{0};
   uint32_t boot_low_{0};
   uint32_t last_raw_attempt_ms_{0};
+  uint32_t rm433_last_code_{0};
+  uint32_t rm433_last_ms_{0};
   size_t used_{0};
   bool boot_initialized_{false};
   bool raw_attempted_{false};
+  bool rm433_seen_{false};
   bool overflow_{false};
   // Keep the bounded scratch buffer off the small ESP8266 callback stack.
   // Define Receiver once (global/static), rather than constructing per frame.

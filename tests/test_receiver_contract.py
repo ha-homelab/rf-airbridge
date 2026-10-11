@@ -158,6 +158,38 @@ int main() {
   esphome::test_now = 400;
   assert(rollover.on_receive(unknown, sink, true) == ReceiveResult::RAW_PUBLISHED);
 
+  esphome::remote_base::RawTimings rm433;
+  for (int bit = 23; bit >= 0; --bit) {
+    bool one = (uint32_t{5} & (uint32_t{1} << bit)) != 0;
+    rm433.push_back(one ? 720 : 240);
+    rm433.push_back(one ? -240 : -720);
+  }
+  rm433.push_back(240);
+  rm433.push_back(-4000);
+  const auto count_before_rm433 = sink.messages.size();
+  assert(receiver.on_receive(rm433, sink, false, true) == ReceiveResult::SUPPRESSED);
+  sink.connected = false;
+  assert(receiver.on_receive(rm433, sink) == ReceiveResult::OFFLINE);
+  sink.connected = true;
+  assert(sink.messages.size() == count_before_rm433);
+  assert(receiver.on_receive(rm433, sink, false) == ReceiveResult::DECODED_PUBLISHED);
+  assert(sink.messages.back().topic == "rf/received");
+  std::cout << sink.messages.back().payload << '\n';
+  for (int i = 0; i < 50; ++i) {
+    esphome::test_now += 100;
+    assert(receiver.on_receive(rm433, sink) == ReceiveResult::REPEAT_SUPPRESSED);
+  }
+  esphome::test_now += 350;
+  assert(receiver.on_receive(rm433, sink) == ReceiveResult::DECODED_PUBLISHED);
+  // A different button must not be swallowed by another button's repeat window.
+  rm433[0] = 720;
+  rm433[1] = -240;
+  assert(receiver.on_receive(rm433, sink) == ReceiveResult::DECODED_PUBLISHED);
+  esphome::test_now = UINT32_MAX - 100;
+  assert(receiver.on_receive(rm433, sink) == ReceiveResult::DECODED_PUBLISHED);
+  esphome::test_now = 100;
+  assert(receiver.on_receive(rm433, sink) == ReceiveResult::REPEAT_SUPPRESSED);
+
   rf_bridge::Receiver invalid_source("invalid\"source");
   assert(invalid_source.on_receive(known, sink) == ReceiveResult::INVALID_CONFIGURATION);
   rf_bridge::Receiver too_long("abcdefghijklmnopqrstuvwxyz1234567");
@@ -242,6 +274,15 @@ class ReceiverContractTest(unittest.TestCase):
             self.assertEqual(len(event["boot_id"]), 16)
             self.assertEqual(event["event_id"],
                              f'{event["source"]}:{event["boot_id"]}:{event["sequence"]}')
+
+    def test_rm433_is_decoded_without_raw_learning_and_has_distinct_format(self):
+        event = self.messages[5]
+        self.assertEqual(event["format"], "rm433")
+        self.assertEqual(event["encoding"], "rc_switch_1")
+        self.assertEqual(event["bits"], 24)
+        self.assertEqual(event["code"], "000000000000000000000101")
+        self.assertEqual(event["value"], "5")
+        self.assertEqual(event["pulse_length_us"], 240)
 
 
 if __name__ == "__main__":

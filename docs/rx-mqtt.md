@@ -139,6 +139,55 @@ timings through `on_raw`, then calls the same stock RCSwitch decoder with its
 bit-count output parameter. This preserves leading zeroes without replacing
 the existing receiver or sensor listeners.
 
+## Sonoff RM433 short-pulse frames
+
+RM433 uses protocol-1 pulse ratios at approximately 240 microseconds. ESPHome's
+stock protocol-1 timing is 350 microseconds, so the existing 30% tolerance does
+not reliably accept this remote. To receive it, override the package's input
+filter in the device configuration:
+
+```yaml
+remote_receiver:
+  filter: 100us
+```
+
+The added decoder accepts only a complete 24-bit frame with a trailing sync,
+checks the polarity and duration of every pulse, and publishes to `rf/received`
+without requiring raw learning. Existing RCSwitch decoding and motion entity
+definitions are unchanged. A synthetic event looks like:
+
+```json
+{
+  "schema": 1,
+  "source": "rf",
+  "origin": "radio",
+  "format": "rm433",
+  "encoding": "rc_switch_1",
+  "frequency_mhz": 433.92,
+  "boot_id": "0123456789abcdef",
+  "sequence": 1,
+  "event_id": "rf:0123456789abcdef:1",
+  "uptime_ms": 123456,
+  "bits": 24,
+  "code": "010110100011010111001001",
+  "value": "5912009",
+  "pulse_length_us": 240
+}
+```
+
+Match `source`, `origin`, `format`, `bits`, and the exact learned `code` in Home
+Assistant. The format identifies a waveform, not an authenticated manufacturer
+or sender. Learn each button on the actual remote; do not copy the sample code.
+Do not pass these events to `send_rf_code`: its stock protocol-1 transmit timing
+does not reproduce the short pulses.
+
+Repeated copies of the same code are suppressed until the receiver has seen
+350 ms of silence for that code. Repeats refresh that interval, so a continuous
+hold normally emits one press. Another code is accepted immediately. There is
+no release event or dedicated long-press detection; reception gaps or collisions
+can still split a hold into multiple presses. Fast repeated presses within the
+quiet interval may be combined. No received event causes an RF transmission.
+
 ## Unknown raw frames
 
 Enable **RF Raw Learning** temporarily and listen to `rf/received/raw` while
