@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- Configurable native ESPHome RM433 button events use the existing decoder and
+  repeat guard independently of MQTT availability. Existing `rf/received`
+  payloads and motion sensor consumers are preserved. Eight code slots default
+  to disabled and must be learned/configured privately for each remote.
+
+### Changed
+
+- Disable the MQTT connection-loss reboot timer so a broker outage does not
+  restart local native-API control. API authentication and Wi-Fi settings remain
+  unchanged.
+
 ### Security
 
 - Bluetooth capture checks exact key sizes in the verified HTTPS certificate
@@ -16,5 +29,5 @@
   environment. HTTPS capture now requires `cryptography` and a runtime exposing
   its verified certificate chain. Replace weak server/issuer keys instead of
   disabling verification. See [the capture profile](docs/bluetooth.md#capture-from-home-assistant).
-- Firmware, RF command behavior and existing captures are unchanged. These
-  source changes do not update or operate any device.
+- The Bluetooth capture changes do not affect existing captures. Installing
+  source changes alone does not update or operate any device.

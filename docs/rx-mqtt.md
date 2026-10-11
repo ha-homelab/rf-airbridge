@@ -139,6 +139,108 @@ timings through `on_raw`, then calls the same stock RCSwitch decoder with its
 bit-count output parameter. This preserves leading zeroes without replacing
 the existing receiver or sensor listeners.
 
+## Sonoff RM433 short-pulse frames
+
+RM433 uses protocol-1 pulse ratios at approximately 240 microseconds. ESPHome's
+stock protocol-1 timing is 350 microseconds, so the existing 30% tolerance does
+not reliably accept this remote. To receive it, override the package's input
+filter in the device configuration:
+
+```yaml
+remote_receiver:
+  filter: 100us
+```
+
+The added decoder accepts only a complete 24-bit frame with a trailing sync,
+checks the polarity and duration of every pulse, and publishes to `rf/received`
+without requiring raw learning. Existing RCSwitch decoding and motion entity
+definitions are unchanged. A synthetic event looks like:
+
+```json
+{
+  "schema": 1,
+  "source": "rf",
+  "origin": "radio",
+  "format": "rm433",
+  "encoding": "rc_switch_1",
+  "frequency_mhz": 433.92,
+  "boot_id": "0123456789abcdef",
+  "sequence": 1,
+  "event_id": "rf:0123456789abcdef:1",
+  "uptime_ms": 123456,
+  "bits": 24,
+  "code": "010110100011010111001001",
+  "value": "5912009",
+  "pulse_length_us": 240
+}
+```
+
+Match `source`, `origin`, `format`, `bits`, and the exact learned `code` in Home
+Assistant. The format identifies a waveform, not an authenticated manufacturer
+or sender. Learn each button on the actual remote; do not copy the sample code.
+Do not pass these events to `send_rf_code`: its stock protocol-1 transmit timing
+does not reproduce the short pulses.
+
+Repeated copies of the same code are suppressed until the receiver has seen
+350 ms of silence for that code. Repeats refresh that interval, so a continuous
+hold normally emits one press. Another code is accepted immediately. There is
+no release event or dedicated long-press detection; reception gaps or collisions
+can still split a hold into multiple presses. Fast repeated presses within the
+quiet interval may be combined. No received event causes an RF transmission.
+
+## Native RM433 button events
+
+The package exposes one native ESPHome event entity named **RM433 Button**, with
+object ID `rm433_button` and event types `button_1` through `button_8`. Configure
+the exact learned codes in the private device YAML; the defaults disable all
+eight slots. For example, using **synthetic** codes only:
+
+```yaml
+substitutions:
+  rm433_button_1_code: "0x123451"
+  rm433_button_2_code: "0x123452"
+  rm433_button_3_code: "0x123454"
+  rm433_button_4_code: "0x123458"
+  rm433_button_5_code: "0x123453"
+  rm433_button_6_code: "0x123456"
+  rm433_button_7_code: "0x12345c"
+  rm433_button_8_code: "0x123459"
+remote_receiver:
+  filter: 100us
+```
+
+Learn each physical button independently and use distinct 24-bit codes; do not
+infer the order from sorted numeric values. An out-of-range value such as
+`0xffffffff` disables a slot. No wildcard or remote-prefix matching is used.
+Unmatched RM433 codes still produce the existing MQTT observation, but no native
+button event. Keep real codes private.
+
+The same decoder and 350 ms quiet-period guard feed both outputs. Native events
+are triggered before MQTT publication and still work while the broker is
+disconnected or a publish fails. TX suppression rejects both outputs. The
+package sets `mqtt.reboot_timeout: 0s`, so loss of the broker does not periodically
+restart an otherwise connected local controller. Native API and Wi-Fi reboot
+settings remain those of the existing device configuration.
+
+The optional fifth argument to `Receiver::on_receive` is a prompt, synchronous
+`void(uint32_t)` callback for accepted RM433 codes. Its return value still reports
+the MQTT outcome: `OFFLINE` or `PUBLISH_FAILED` does not undo a native event.
+Callers that omit the callback retain their previous MQTT-only behavior. There
+is no receive backlog, and reconnecting MQTT does not replay the offline press.
+
+ESPHome 2026.8.2 rejects an empty `mqtt_id`, so the generic event also has an
+automatic MQTT wrapper with discovery disabled and `retain: false`. Existing
+consumers should continue to use `rf/received`, whose payload, topic, QoS and
+retain flag are unchanged. Do not bind the same controller to both paths unless
+it independently prevents duplicate actions.
+
+Native API events do not include a source timestamp or a delivery acknowledgement.
+They are not a guarantee of bounded latency or reliable delivery through a
+disconnection. A subscriber must avoid treating reconnect/state initialization
+as a new physical press and must bound its own queue. Measure latency and event
+loss with the actual firmware, network and subscriber before making timing
+claims. The existing API authentication/encryption configuration is preserved.
+
 ## Unknown raw frames
 
 Enable **RF Raw Learning** temporarily and listen to `rf/received/raw` while
