@@ -22,6 +22,8 @@ rejects other ESPHome versions until it has been rebased and tested.
 - **RM433 button events:** a bounded short-pulse decoder publishes distinct
   `rm433` events and suppresses repeated packets from one press. Set the device
   input filter to `100us` as described in the [receive guide](docs/rx-mqtt.md#sonoff-rm433-short-pulse-frames).
+- **Local RM433 control:** configure eight learned codes to emit native ESPHome
+  `rm433_button` events independently of MQTT. See the [native event guide](docs/rx-mqtt.md#native-rm433-button-events).
 - **Optional raw learning:** an off-by-default diagnostic switch exposes bounded
   captures that the RCSwitch decoder could not recognize.
 - **A Home Assistant example:** match one exact code and increment a counter,
@@ -42,12 +44,13 @@ flowchart LR
     Radio --> Events[Decoded codes / optional raw captures]
     Events --> MQTT[MQTT broker]
     MQTT --> HA
+    Radio -->|Learned RM433 buttons| Native[Native API event subscribers]
     HA -->|Explicit ESPHome API command| Radio
     Radio -->|Selected transmitted code| Devices
 ```
 
 MQTT carries observations. The authenticated native ESPHome API carries transmit
-requests. No MQTT receive message is automatically retransmitted, and this
+requests and configured RM433 button events. No MQTT receive message is automatically retransmitted, and this
 project does not subscribe to an MQTT transmit-command topic.
 
 The CC1101 is half duplex: reception pauses during a transmission, then resumes.

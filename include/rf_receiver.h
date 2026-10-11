@@ -43,16 +43,20 @@ class Receiver {
         tolerance_percent_(tolerance_percent) {}
 
   // MqttClient may be ESPHome's MQTTClientComponent or a compatible test sink.
-  // No MQTT subscription, entity publication, backlog, or RF transmission is
-  // created here. suppress_rx is controlled by the caller's TX/cooldown guard.
+  // on_rm433 runs once per accepted press, independently of MQTT availability.
+  // It must return promptly; no backlog or RF transmission is created here.
+  // The return value still describes MQTT delivery. suppress_rx is controlled
+  // by the caller's TX/cooldown guard and suppresses both outputs.
   template<typename MqttClient>
   ReceiveResult on_receive(const esphome::remote_base::RawTimings &timings, MqttClient &mqtt,
-                           bool learn_raw = false, bool suppress_rx = false) {
+                           bool learn_raw = false, bool suppress_rx = false,
+                           void (*on_rm433)(uint32_t) = nullptr) {
     if (suppress_rx)
       return ReceiveResult::SUPPRESSED;
     if (!this->valid_configuration_())
       return ReceiveResult::INVALID_CONFIGURATION;
-    if (!mqtt.is_connected())
+    const bool mqtt_connected = mqtt.is_connected();
+    if (!mqtt_connected && on_rm433 == nullptr)
       return ReceiveResult::OFFLINE;
 
     uint32_t rm433_code = 0;
@@ -66,6 +70,10 @@ class Receiver {
       this->rm433_last_ms_ = now;
       if (repeat)
         return ReceiveResult::REPEAT_SUPPRESSED;
+      if (on_rm433 != nullptr)
+        on_rm433(rm433_code);
+      if (!mqtt_connected)
+        return ReceiveResult::OFFLINE;
       char binary[25];
       for (uint8_t bit = 0; bit < 24; ++bit)
         binary[bit] = (rm433_code & (uint32_t{1} << (23 - bit))) ? '1' : '0';
@@ -78,6 +86,9 @@ class Receiver {
                     binary, rm433_code, rm433_pulse);
       return this->publish_(mqtt, this->decoded_topic_, ReceiveResult::DECODED_PUBLISHED);
     }
+
+    if (!mqtt_connected)
+      return ReceiveResult::OFFLINE;
 
     esphome::remote_base::RemoteReceiveData input(
         timings, this->tolerance_percent_, esphome::remote_base::TOLERANCE_MODE_PERCENTAGE);

@@ -5,6 +5,20 @@
 
 namespace rf_bridge {
 
+// Codes are learned per remote. Out-of-range values disable unused slots.
+// The physical button order belongs in private configuration, not the decoder.
+inline const char *rm433_button_type(uint32_t code, const uint32_t (&codes)[8]) {
+  static const char *const types[] = {"button_1", "button_2", "button_3", "button_4",
+                                     "button_5", "button_6", "button_7", "button_8"};
+  if (code <= 0xffffffU) {
+    for (uint8_t i = 0; i < 8; ++i) {
+      if (codes[i] == code)
+        return types[i];
+    }
+  }
+  return nullptr;
+}
+
 // RM433 uses protocol-1 pulse ratios at approximately 240 us. ESPHome's
 // stock protocol 1 assumes 350 us, so its 30% tolerance excludes these frames.
 // Accept a complete 24-bit frame and its trailing sync only. Never accept a

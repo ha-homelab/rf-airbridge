@@ -4,6 +4,16 @@ substitutions:
   rf_received_topic: rf/received
   rf_raw_topic: rf/received/raw
   rf_transmit_result_topic: rf/transmit/result
+  # Override with this remote's learned 24-bit codes in private configuration.
+  # Values outside 24 bits disable a slot; default configuration matches none.
+  rm433_button_1_code: "0xffffffff"
+  rm433_button_2_code: "0xffffffff"
+  rm433_button_3_code: "0xffffffff"
+  rm433_button_4_code: "0xffffffff"
+  rm433_button_5_code: "0xffffffff"
+  rm433_button_6_code: "0xffffffff"
+  rm433_button_7_code: "0xffffffff"
+  rm433_button_8_code: "0xffffffff"
 
 esphome:
   includes:
@@ -19,6 +29,18 @@ external_components:
 
 mqtt:
   id: rf_mqtt
+  reboot_timeout: 0s
+
+event:
+  - platform: template
+    id: rm433_button
+    name: RM433 Button
+    device_class: button
+    event_types: [button_1, button_2, button_3, button_4, button_5, button_6, button_7, button_8]
+    # ESPHome 2026.8.2 requires a nonempty mqtt_id. Keep the automatic MQTT
+    # wrapper undiscovered and non-retained; rf/received stays authoritative.
+    discovery: false
+    retain: false
 
 cc1101:
   id: rf_radio
@@ -41,7 +63,14 @@ remote_receiver:
     then:
       - lambda: |-
           static rf_bridge::Receiver bridge("${rf_source}", "${rf_received_topic}", "${rf_raw_topic}");
-          bridge.on_receive(x, *id(rf_mqtt), id(rf_raw_learning).state, id(rf_tx_active));
+          bridge.on_receive(x, *id(rf_mqtt), id(rf_raw_learning).state, id(rf_tx_active), [](uint32_t code) {
+            static const uint32_t codes[] = {
+              ${rm433_button_1_code}, ${rm433_button_2_code}, ${rm433_button_3_code}, ${rm433_button_4_code},
+              ${rm433_button_5_code}, ${rm433_button_6_code}, ${rm433_button_7_code}, ${rm433_button_8_code}
+            };
+            if (const char *type = rf_bridge::rm433_button_type(code, codes))
+              id(rm433_button).trigger(type);
+          });
 
 globals:
   - id: rf_tx_active

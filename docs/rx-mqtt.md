@@ -188,6 +188,59 @@ no release event or dedicated long-press detection; reception gaps or collisions
 can still split a hold into multiple presses. Fast repeated presses within the
 quiet interval may be combined. No received event causes an RF transmission.
 
+## Native RM433 button events
+
+The package exposes one native ESPHome event entity named **RM433 Button**, with
+object ID `rm433_button` and event types `button_1` through `button_8`. Configure
+the exact learned codes in the private device YAML; the defaults disable all
+eight slots. For example, using **synthetic** codes only:
+
+```yaml
+substitutions:
+  rm433_button_1_code: "0x123451"
+  rm433_button_2_code: "0x123452"
+  rm433_button_3_code: "0x123454"
+  rm433_button_4_code: "0x123458"
+  rm433_button_5_code: "0x123453"
+  rm433_button_6_code: "0x123456"
+  rm433_button_7_code: "0x12345c"
+  rm433_button_8_code: "0x123459"
+remote_receiver:
+  filter: 100us
+```
+
+Learn each physical button independently and use distinct 24-bit codes; do not
+infer the order from sorted numeric values. An out-of-range value such as
+`0xffffffff` disables a slot. No wildcard or remote-prefix matching is used.
+Unmatched RM433 codes still produce the existing MQTT observation, but no native
+button event. Keep real codes private.
+
+The same decoder and 350 ms quiet-period guard feed both outputs. Native events
+are triggered before MQTT publication and still work while the broker is
+disconnected or a publish fails. TX suppression rejects both outputs. The
+package sets `mqtt.reboot_timeout: 0s`, so loss of the broker does not periodically
+restart an otherwise connected local controller. Native API and Wi-Fi reboot
+settings remain those of the existing device configuration.
+
+The optional fifth argument to `Receiver::on_receive` is a prompt, synchronous
+`void(uint32_t)` callback for accepted RM433 codes. Its return value still reports
+the MQTT outcome: `OFFLINE` or `PUBLISH_FAILED` does not undo a native event.
+Callers that omit the callback retain their previous MQTT-only behavior. There
+is no receive backlog, and reconnecting MQTT does not replay the offline press.
+
+ESPHome 2026.8.2 rejects an empty `mqtt_id`, so the generic event also has an
+automatic MQTT wrapper with discovery disabled and `retain: false`. Existing
+consumers should continue to use `rf/received`, whose payload, topic, QoS and
+retain flag are unchanged. Do not bind the same controller to both paths unless
+it independently prevents duplicate actions.
+
+Native API events do not include a source timestamp or a delivery acknowledgement.
+They are not a guarantee of bounded latency or reliable delivery through a
+disconnection. A subscriber must avoid treating reconnect/state initialization
+as a new physical press and must bound its own queue. Measure latency and event
+loss with the actual firmware, network and subscriber before making timing
+claims. The existing API authentication/encryption configuration is preserved.
+
 ## Unknown raw frames
 
 Enable **RF Raw Learning** temporarily and listen to `rf/received/raw` while
