@@ -54,7 +54,21 @@ upstream service, hardware model or production deployment.
 
 ## Remaining security assessment
 
-The existing native receiver, serialization and TX-validation harnesses run under AddressSanitizer and UndefinedBehaviorSanitizer in host CI, with C++ assertions enabled. All 24 host tests also passed locally with sanitizers on 2026-10-08. This covers the exercised host paths with hardware doubles; it does not instrument a live ESP8266 or certify RF behavior. RF replay and third-party ESPHome transport policies need an explicit applicability assessment for cryptography criteria.
+The existing native receiver, serialization and TX-validation harnesses run under AddressSanitizer and UndefinedBehaviorSanitizer in host CI, with C++ assertions enabled. All 44 host tests passed locally with sanitizers on 2026-10-14. This covers the exercised host paths with hardware doubles; it does not instrument a live ESP8266 or certify RF behavior. RF replay and third-party ESPHome transport policies need an explicit applicability assessment for cryptography criteria.
 
 Report new issues through [SECURITY.md](../SECURITY.md). An OpenSSF assessment
 records evidence and applicability; it is not a guarantee that a system is safe.
+
+## Pinned firmware cryptographic boundary
+
+The example requires an ESPHome API encryption key. Its pinned 2026.8.2
+[Noise implementation](https://github.com/esphome/esphome/blob/2026.8.2/esphome/components/api/api_frame_helper_noise.cpp)
+uses the published Noise NNpsk0/25519/ChaChaPoly/SHA256 suite and the platform
+secure random source. Generate the 32-byte API key using a cryptographically
+secure tool and keep it in private secrets. The
+[OTA implementation](https://github.com/esphome/esphome/blob/2026.8.2/esphome/components/esphome/ota/ota_esphome.cpp)
+requires SHA256 challenge authentication; its MD5 transfer checksum detects
+corruption and is not a publisher signature or authentication claim. Use a
+long machine-generated OTA secret, separate from human account passwords.
+OTA and plain MQTT require an isolated trusted network; do not expose them
+to untrusted networks. RF frames remain replayable, not authenticated identities.

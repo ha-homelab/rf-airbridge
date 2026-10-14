@@ -1,5 +1,7 @@
 # RF Airbridge
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15475/badge)](https://www.bestpractices.dev/en/projects/15475)
+
 **Learn RF codes in Home Assistant without adding a new ESPHome sensor for every
 device, and transmit a selected code from Home Assistant.** RF Airbridge extends
 an ESP8266 NodeMCU and CC1101 receiver with an MQTT event stream and a validated
@@ -337,3 +339,9 @@ compliance with GPLv3, including the applicable corresponding-source obligations
 See [contribution and test requirements](CONTRIBUTING.md), the
 [security reporting policy](SECURITY.md), [security design](docs/security-design.md),
 and the [OpenSSF evidence and remaining criteria](docs/openssf-evidence.md).
+
+## Project practices
+
+[Contribute](CONTRIBUTING.md) · [Governance](GOVERNANCE.md) ·
+[Code of Conduct](CODE_OF_CONDUCT.md) · [Roadmap](ROADMAP.md) ·
+[Quality and assessment scope](docs/quality.md)
