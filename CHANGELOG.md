@@ -17,6 +17,8 @@
 
 ### Security
 
+- Replace the obsolete Scorecard CI container with the reviewed, checksum-pinned scanner. Keep the upstream SARIF reporting policy, GitHub Security upload and retained report artifacts. The replaced CI image contained 25 high-severity dependency findings in the recorded scan. The scanner replacement changes CI tooling, not the distributed application runtime. OpenSSF REST publication remains disabled as before.
+
 - Bluetooth capture checks exact key sizes in the verified HTTPS certificate
   chain before its HTTP upgrade or token exchange. This rejects RSA keys below
   2048 bits, including the 2047-bit boundary accepted by some OpenSSL defaults.
