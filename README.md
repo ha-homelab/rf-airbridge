@@ -35,6 +35,9 @@ rejects other ESPHome versions until it has been rebased and tested.
   shared busy/cooldown guard.
 - **Reception restored after transmission:** a small, version-pinned receiver
   patch reattaches the ESP8266 capture interrupt without reallocating its buffer.
+- **Optional Wake-on-LAN:** a separate [Wi-Fi wake action](docs/wake-on-lan.md)
+  sends a television magic packet from the same node, without an SSH relay or
+  changing RF reception. It is enabled only by explicitly including its package.
 
 ## How the pieces fit
 
