@@ -1,0 +1,19 @@
+# Optional companion: send a network magic packet from the RF node's Wi-Fi LAN.
+# Include explicitly; this is deliberately not part of rf-airbridge.yaml.
+substitutions:
+  living_tv_wol_mac: !secret living_tv_mac_address
+
+esphome:
+  includes:
+    - ${rf_airbridge_path}/include/wol_packet.h
+    - ${rf_airbridge_path}/include/wifi_wake.h
+
+api:
+  actions:
+    - action: wake_living_tv
+      then:
+        - lambda: |-
+            static_assert(rf_bridge::wol::valid_mac("${living_tv_wol_mac}"),
+                          "living_tv_mac_address must be a unicast MAC in AA:BB:CC:DD:EE:FF form");
+            constexpr auto packet = rf_bridge::wol::magic_packet("${living_tv_wol_mac}");
+            rf_bridge::wol::send_magic_packet(packet);

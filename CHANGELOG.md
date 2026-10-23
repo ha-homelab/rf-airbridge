@@ -4,6 +4,10 @@
 
 ### Added
 
+- An optional native Wake-on-LAN action sends a television magic packet from
+  the ESP8266's Wi-Fi network. Its target MAC is supplied privately through
+  `!secret`; the RF package and existing node behavior are unchanged by default.
+
 - Configurable native ESPHome RM433 button events use the existing decoder and
   repeat guard independently of MQTT availability. Existing `rf/received`
   payloads and motion sensor consumers are preserved. Eight code slots default
