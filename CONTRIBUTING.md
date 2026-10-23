@@ -100,3 +100,17 @@ strict modules and explicit interface types where TypeScript is used. Native
 C++ changes follow the surrounding ESPHome style, use explicit bounds and avoid
 unchecked pointer arithmetic. Do not reformat vendored code independently of
 its recorded upstream source. Existing exceptions must be explained in review.
+
+## PR validation and independent approval
+
+The `Validation` workflow must pass both `test` (including native sanitizers) and
+`Compile ESPHome example`. The compile check name stays stable across ESPHome
+version updates; the workflow pins the actual ESPHome image separately. For a trusted author's ready PR, add `automerge`
+to request review through the shared metadata-only approval workflow. Owner PRs
+use the existing independent bot credential; Dependabot uses `GITHUB_TOKEN`. No
+PR code is checked out by the approval workflow, and approval does not bypass CI.
+
+The matching Terraform policy requires one current approval and both exact GitHub
+Actions check names without a bypass. Merge and verify the approval workflow before
+applying that policy, then read back the live rules. Committing the workflow alone
+does not activate repository protection.
