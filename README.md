@@ -17,6 +17,10 @@ The implementation is specific to **ESPHome 2026.8.2**, **ESP8266**, and the
 documented **433.92 MHz ASK/OOK** wiring. The local receiver patch deliberately
 rejects other ESPHome versions until it has been rebased and tested.
 
+## Install without a local toolchain
+
+Compile your private configuration in **ESPHome Device Builder**, then use **[ESPHome Web](https://web.esphome.io/)** to flash the downloaded firmware over USB. [Browser installation and troubleshooting](docs/browser-install.md) explains the complete route. Your MQTT/API settings and learned codes remain private; source-release ZIPs and dummy CI builds are not installable device configurations.
+
 ## What it adds
 
 - **Decoded RF events:** `rf/received` contains protocol, exact binary code,
