@@ -1,6 +1,7 @@
 """Check that optional network wake never changes the RF receiver or auto-wakes."""
 
 import importlib.util
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,6 +14,10 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SANITIZER_FLAGS = (
+    ["-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-g", "-O1"]
+    if os.environ.get("RF_CPP_SANITIZERS") == "1" else []
+)
 
 
 class SecretLoader(yaml.SafeLoader):
@@ -41,10 +46,20 @@ class WakeOnLanTest(unittest.TestCase):
                 action = package["api"]["actions"][0]
                 self.assertEqual(action["action"], action_name)
                 self.assertNotIn("variables", action)
-                code = action["then"][0]["lambda"]
+                if target == "lg2":
+                    repeat = action["then"][0]["repeat"]
+                    self.assertEqual(repeat["count"], 3)
+                    self.assertEqual(len(repeat["then"]), 2)
+                    self.assertEqual(repeat["then"][1], {"delay": "250ms"})
+                    code = repeat["then"][0]["lambda"]
+                    self.assertIn("rf_bridge::wol::send_subnet_magic_packet(packet)", code)
+                else:
+                    code = action["then"][0]["lambda"]
+                    self.assertEqual(len(action["then"]), 1)
+                    self.assertIn("rf_bridge::wol::send_magic_packet(packet)", code)
                 self.assertIn('static_assert(rf_bridge::wol::valid_mac("${' + variable + '}"),', code)
                 self.assertIn('rf_bridge::wol::magic_packet("${' + variable + '}")', code)
-                self.assertIn("rf_bridge::wol::send_magic_packet(packet)", code)
+                self.assertNotIn("delay(", code)
 
     def test_default_rf_config_does_not_enable_network_wake(self):
         for name in ("packages/rf-airbridge.yaml", "device.example.yaml"):
@@ -120,8 +135,107 @@ int main() {
             source = Path(directory) / "test.cpp"
             binary = Path(directory) / "test"
             source.write_text(harness)
-            subprocess.run([compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror",
+            subprocess.run([compiler, *SANITIZER_FLAGS, "-std=c++17", "-Wall", "-Wextra", "-Werror",
                             "-I", str(ROOT / "include"), str(source), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_directed_broadcast_uses_station_mask_and_preserves_living_action(self):
+        compiler = shutil.which("c++")
+        self.assertIsNotNone(compiler, "A native C++ compiler is required")
+        support = r'''
+#pragma once
+#include <array>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+class IPAddress {
+ public:
+  std::array<uint8_t,4> bytes{};
+  IPAddress() = default;
+  IPAddress(uint8_t a,uint8_t b,uint8_t c,uint8_t d):bytes{a,b,c,d}{}
+  uint8_t operator[](size_t i) const { return bytes[i]; }
+  bool is_ip4() const { return true; }
+  bool operator==(const IPAddress &other) const { return bytes==other.bytes; }
+};
+struct FakeWiFi {
+  IPAddress address{192,168,160,206};
+  IPAddress mask{255,255,240,0};
+  IPAddress localIP() const { return address; }
+  IPAddress subnetMask() const { return mask; }
+};
+inline FakeWiFi WiFi;
+struct Frame { IPAddress destination; std::vector<uint8_t> bytes; };
+inline std::vector<Frame> frames;
+inline bool connected=true, begin_ok=true, write_ok=true, end_ok=true;
+class WiFiUDP {
+  Frame frame;
+ public:
+  int beginPacketMulticast(IPAddress destination,uint16_t port,IPAddress,int ttl) {
+    assert(port==9 && ttl==128); frame.destination=destination; return begin_ok;
+  }
+  size_t write(const uint8_t *data,size_t size) {
+    frame.bytes.assign(data,data+size); return write_ok ? size : 0;
+  }
+  int endPacket() { frames.push_back(frame); return end_ok; }
+};
+namespace esphome::network {
+  inline bool is_connected() { return connected; }
+  inline std::array<IPAddress,1> get_ip_addresses() { return {WiFi.address}; }
+}
+#define ESP_LOGW(tag,...) ((void)(tag))
+#define ESP_LOGI(tag,...) ((void)(tag))
+'''
+        harness = r'''
+#include "wifi_wake.h"
+using namespace rf_bridge::wol;
+int main() {
+  constexpr auto packet=magic_packet("02:AB:CD:00:12:35");
+  assert(send_magic_packet(packet));
+  assert(frames.size()==1 && frames.back().destination==IPAddress(255,255,255,255));
+  assert(send_subnet_magic_packet(packet));
+  assert(frames.size()==2 && frames.back().destination==IPAddress(192,168,175,255));
+  assert(frames.back().bytes==std::vector<uint8_t>(packet.begin(),packet.end()));
+  WiFi.address=IPAddress(172,16,6,3); WiFi.mask=IPAddress(255,255,254,0);
+  assert(send_subnet_magic_packet(packet));
+  assert(frames.back().destination==IPAddress(172,16,7,255));
+  WiFi.address=IPAddress(10,42,3,4); WiFi.mask=IPAddress(255,255,0,0);
+  assert(send_subnet_magic_packet(packet));
+  assert(frames.back().destination==IPAddress(10,42,255,255));
+  const auto sent=frames.size();
+  for (auto mask:{IPAddress(0,0,0,0),IPAddress(255,255,255,255),
+                  IPAddress(255,255,255,254),IPAddress(255,0,255,0)}) {
+    WiFi.mask=mask; assert(!send_subnet_magic_packet(packet));
+  }
+  WiFi.mask=IPAddress(255,255,240,0);
+  for (auto address:{IPAddress(0,0,0,0),IPAddress(224,0,0,1),
+                     IPAddress(192,168,160,0),IPAddress(192,168,175,255)}) {
+    WiFi.address=address; assert(!send_subnet_magic_packet(packet));
+  }
+  assert(frames.size()==sent);
+  WiFi.address=IPAddress(192,168,160,206);
+  connected=false; assert(!send_subnet_magic_packet(packet));
+  connected=true; begin_ok=false; assert(!send_subnet_magic_packet(packet));
+  assert(frames.size()==sent);
+  begin_ok=true; write_ok=false; assert(!send_subnet_magic_packet(packet));
+  write_ok=true; end_ok=false; assert(!send_subnet_magic_packet(packet));
+  end_ok=true; WiFi.mask=IPAddress(0,0,0,0);
+  assert(send_magic_packet(packet)); // Original action never depends on subnet-mask lookup.
+  assert(frames.back().destination==IPAddress(255,255,255,255));
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="rf-wol-transport-test-") as directory:
+            temporary = Path(directory)
+            (temporary / "fake_platform.h").write_text(support)
+            for name in ("ESP8266WiFi.h", "WiFiUdp.h", "esphome/components/network/util.h", "esphome/core/log.h"):
+                path = temporary / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('#include "fake_platform.h"\n')
+            source, binary = temporary / "test.cpp", temporary / "test"
+            source.write_text(harness)
+            subprocess.run([compiler, *SANITIZER_FLAGS, "-std=c++17", "-Wall", "-Wextra", "-Werror",
+                            "-I", str(temporary), "-I", str(ROOT / "include"),
+                            str(source), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
 

@@ -3,7 +3,7 @@
 The optional [living-room package](../packages/wake-on-lan.yaml) adds
 `wake_living_tv`; the independent [LG2 package](../packages/wake-on-lan-lg2.yaml)
 adds `wake_lg2`. Include either package or both. Home Assistant calls the actions
-through the native ESPHome API; the ESP8266 sends a UDP magic packet from its
+through the native ESPHome API; the ESP8266 sends UDP magic packets from its
 Wi-Fi interface. No additional board, cable, CC1101 transmission, or SSH relay
 is required. The package has no startup, reconnect, or scheduled trigger.
 
@@ -78,10 +78,22 @@ mode: single
 
 Replace the entity with the actual native webOS TV entity and the action prefix
 with the actual ESPHome node name. Reconcile any existing turn-on automation
-instead of adding a duplicate wake path. The automation sends the packet and
-returns; a TV controller using HA as fallback should own its bounded readiness
-wait. Firmware does not choose the control route, launch an app, or retry
-automatically. Do not use a power-toggle action as the fallback.
+instead of adding a duplicate wake path. The automation dispatches the wake
+action and returns; a TV controller using HA as fallback should own its bounded
+readiness wait. Firmware performs only the finite packet sequence described
+below. It does not choose the control route, launch an app, or keep retrying.
+Do not use a power-toggle action as the fallback.
+
+For an OttPlay controller without a working LAN wake route, omit the optional
+`mac` field from that TV's controller binding and configure its Home Assistant
+`fallback` for the native `media_player.lg2` entity. Direct webOS/SSAP control
+remains the first route for an awake TV. When wake needs the fallback, HA's
+native turn-on request invokes the automation above and the RF node sends the
+LAN-side packet sequence. The controller owns readiness checking and app
+launch; do not add another wait/retry loop to this automation. See the
+[OttPlay television setup](https://github.com/open-ott-play/ottplay-control-server/blob/main/docs/television.md)
+for private token files and native TV bindings. Never point the fallback at an
+OttPlay proxy entity, which could route the request back to the controller.
 
 The built-in ESPHome `button` component cannot be added unchanged here: in
 2026.8.2 it reserves the word `button`, which is already a parameter of the
@@ -104,9 +116,25 @@ compile-time check rejects malformed, multicast, broadcast, and all-zero MACs.
 5. Test the regular HA television `turn_on` path separately. That HA automation
    may retain an independent infrared `PowerOn` fallback for reliability.
 
-The helper sends a standard magic packet (six `FF` bytes followed
-by the target MAC repeated sixteen times) to `255.255.255.255`, UDP port 9.
-Its message that a packet is being sent is not an acknowledgement. Wake-on-LAN
+Both actions send standard 102-byte magic packets: six `FF` bytes followed by
+the target MAC repeated sixteen times, using UDP port 9. Their destinations
+and packet counts differ:
+
+- `wake_living_tv` preserves the original behavior: one packet to the limited
+  broadcast address `255.255.255.255`.
+- `wake_lg2` attempts three subnet-directed packets, approximately 250 ms apart.
+  ESPHome's nonblocking delays let the main loop and RF reception continue;
+  the finite sequence finishes after approximately 750 ms. Each attempt
+  computes its destination from the node's current Wi-Fi IPv4 address and
+  netmask. It does not assume a `/24` subnet or embed a private IP address.
+
+A missing or invalid subnet, including `/31` or `/32`, prevents that LG2 attempt
+from sending. Wi-Fi and packet-send failures are logged; the next scheduled
+attempt checks the current network again. LG2 does not silently switch to
+limited broadcast or continue beyond three attempts. The TV must be reachable
+through the node's Wi-Fi subnet; broadcasting does not bypass VLAN isolation.
+
+A packet-send log is not an acknowledgement from the TV. Wake-on-LAN
 cannot wake a television whose mains outlet is off, and some televisions need
 their standby network wake option enabled. The action cannot turn the TV off
 or report its state. Repeating a magic packet is safe for an already-awake TV;
