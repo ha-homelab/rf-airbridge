@@ -72,4 +72,4 @@ jobs:
             --workdir /workspace \
             --entrypoint python \
             ghcr.io/esphome/esphome:2026.8.2 \
-            tools/validate_firmware.py --with-wake-on-lan
+            tools/validate_firmware.py --with-wake-on-lan --with-lg2-wake-on-lan
