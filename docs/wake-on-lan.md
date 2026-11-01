@@ -116,21 +116,23 @@ compile-time check rejects malformed, multicast, broadcast, and all-zero MACs.
 5. Test the regular HA television `turn_on` path separately. That HA automation
    may retain an independent infrared `PowerOn` fallback for reliability.
 
-Both actions send standard 102-byte magic packets: six `FF` bytes followed by
-the target MAC repeated sixteen times, using UDP port 9. Their destinations
-and packet counts differ:
+Both `wake_living_tv` and `wake_lg2` send standard 102-byte magic packets: six
+`FF` bytes followed by the target MAC repeated sixteen times, using UDP port 9.
+Each action attempts three subnet-directed packets, approximately 250 ms apart.
+ESPHome's nonblocking delays let the main loop and RF reception continue;
+the finite sequence finishes after approximately 750 ms. Each attempt
+computes its destination from the node's current Wi-Fi IPv4 address and
+netmask. It does not assume a `/24` subnet or embed a private IP address.
 
-- `wake_living_tv` preserves the original behavior: one packet to the limited
-  broadcast address `255.255.255.255`.
-- `wake_lg2` attempts three subnet-directed packets, approximately 250 ms apart.
-  ESPHome's nonblocking delays let the main loop and RF reception continue;
-  the finite sequence finishes after approximately 750 ms. Each attempt
-  computes its destination from the node's current Wi-Fi IPv4 address and
-  netmask. It does not assume a `/24` subnet or embed a private IP address.
+The living-room action keeps its existing name, no-argument signature and
+`living_tv_mac_address` secret. Its transport now uses the same directed burst
+as LG2: some standby interfaces ignore the old limited-broadcast destination
+`255.255.255.255`. Existing HA callers need no change, but the updated firmware
+must be installed for the new packet behavior.
 
-A missing or invalid subnet, including `/31` or `/32`, prevents that LG2 attempt
+A missing or invalid subnet, including `/31` or `/32`, prevents that attempt
 from sending. Wi-Fi and packet-send failures are logged; the next scheduled
-attempt checks the current network again. LG2 does not silently switch to
+attempt checks the current network again. Neither action silently switches to
 limited broadcast or continue beyond three attempts. The TV must be reachable
 through the node's Wi-Fi subnet; broadcasting does not bypass VLAN isolation.
 

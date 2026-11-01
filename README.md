@@ -42,7 +42,7 @@ Compile your private configuration in **ESPHome Device Builder**, then use **[ES
 - **Optional Wake-on-LAN:** independent [living-room and LG2 Wi-Fi wake actions](docs/wake-on-lan.md)
   send a television magic packet from the same node, without an SSH relay or
   changing RF reception. Include either optional package or both; existing
-  living-room installations remain unchanged. LG2 uses three subnet-directed
+  action names and MAC secrets remain valid. Both actions use three subnet-directed
   wake packets with short nonblocking gaps; the [HA power-on example](docs/wake-on-lan.md#connect-the-native-home-assistant-power-on-action)
   provides a LAN-side fallback for controllers outside that network.
 

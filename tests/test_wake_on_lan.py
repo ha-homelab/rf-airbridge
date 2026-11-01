@@ -46,17 +46,13 @@ class WakeOnLanTest(unittest.TestCase):
                 action = package["api"]["actions"][0]
                 self.assertEqual(action["action"], action_name)
                 self.assertNotIn("variables", action)
-                if target == "lg2":
-                    repeat = action["then"][0]["repeat"]
-                    self.assertEqual(repeat["count"], 3)
-                    self.assertEqual(len(repeat["then"]), 2)
-                    self.assertEqual(repeat["then"][1], {"delay": "250ms"})
-                    code = repeat["then"][0]["lambda"]
-                    self.assertIn("rf_bridge::wol::send_subnet_magic_packet(packet)", code)
-                else:
-                    code = action["then"][0]["lambda"]
-                    self.assertEqual(len(action["then"]), 1)
-                    self.assertIn("rf_bridge::wol::send_magic_packet(packet)", code)
+                self.assertEqual(len(action["then"]), 1)
+                repeat = action["then"][0]["repeat"]
+                self.assertEqual(repeat["count"], 3)
+                self.assertEqual(len(repeat["then"]), 2)
+                self.assertEqual(repeat["then"][1], {"delay": "250ms"})
+                code = repeat["then"][0]["lambda"]
+                self.assertIn("rf_bridge::wol::send_subnet_magic_packet(packet)", code)
                 self.assertIn('static_assert(rf_bridge::wol::valid_mac("${' + variable + '}"),', code)
                 self.assertIn('rf_bridge::wol::magic_packet("${' + variable + '}")', code)
                 self.assertNotIn("delay(", code)
@@ -139,7 +135,7 @@ int main() {
                             "-I", str(ROOT / "include"), str(source), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
-    def test_directed_broadcast_uses_station_mask_and_preserves_living_action(self):
+    def test_directed_broadcast_uses_station_mask_and_preserves_legacy_helper(self):
         compiler = shutil.which("c++")
         self.assertIsNotNone(compiler, "A native C++ compiler is required")
         support = r'''
@@ -220,7 +216,7 @@ int main() {
   begin_ok=true; write_ok=false; assert(!send_subnet_magic_packet(packet));
   write_ok=true; end_ok=false; assert(!send_subnet_magic_packet(packet));
   end_ok=true; WiFi.mask=IPAddress(0,0,0,0);
-  assert(send_magic_packet(packet)); // Original action never depends on subnet-mask lookup.
+  assert(send_magic_packet(packet)); // Legacy low-level helper remains available to custom configurations.
   assert(frames.back().destination==IPAddress(255,255,255,255));
 }
 '''
