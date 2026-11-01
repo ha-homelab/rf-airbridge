@@ -12,8 +12,13 @@ api:
   actions:
     - action: wake_living_tv
       then:
-        - lambda: |-
-            static_assert(rf_bridge::wol::valid_mac("${living_tv_wol_mac}"),
-                          "living_tv_mac_address must be a unicast MAC in AA:BB:CC:DD:EE:FF form");
-            constexpr auto packet = rf_bridge::wol::magic_packet("${living_tv_wol_mac}");
-            rf_bridge::wol::send_magic_packet(packet);
+        # ESPHome delays yield to the main loop; RF reception stays active.
+        - repeat:
+            count: 3
+            then:
+              - lambda: |-
+                  static_assert(rf_bridge::wol::valid_mac("${living_tv_wol_mac}"),
+                                "living_tv_mac_address must be a unicast MAC in AA:BB:CC:DD:EE:FF form");
+                  constexpr auto packet = rf_bridge::wol::magic_packet("${living_tv_wol_mac}");
+                  rf_bridge::wol::send_subnet_magic_packet(packet);
+              - delay: 250ms
