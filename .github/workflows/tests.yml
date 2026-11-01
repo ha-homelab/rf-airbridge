@@ -45,6 +45,10 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: python -m unittest discover -s tests -v
+      - name: Fuzz native RF parsing and request validation
+        env:
+          CXX: clang++
+        run: bash fuzz/run.sh 15
 
   firmware:
     name: Compile ESPHome example
