@@ -39,9 +39,10 @@ Compile your private configuration in **ESPHome Device Builder**, then use **[ES
   shared busy/cooldown guard.
 - **Reception restored after transmission:** a small, version-pinned receiver
   patch reattaches the ESP8266 capture interrupt without reallocating its buffer.
-- **Optional Wake-on-LAN:** a separate [Wi-Fi wake action](docs/wake-on-lan.md)
-  sends a television magic packet from the same node, without an SSH relay or
-  changing RF reception. It is enabled only by explicitly including its package.
+- **Optional Wake-on-LAN:** independent [living-room and LG2 Wi-Fi wake actions](docs/wake-on-lan.md)
+  send a television magic packet from the same node, without an SSH relay or
+  changing RF reception. Include either optional package or both; existing
+  living-room installations remain unchanged.
 
 ## How the pieces fit
 

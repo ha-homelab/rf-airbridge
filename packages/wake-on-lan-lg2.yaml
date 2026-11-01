@@ -1,0 +1,19 @@
+# Optional second television: independent of the living-room wake package.
+# Both packages share the existing Wi-Fi helper and preserve every RF action.
+substitutions:
+  lg2_tv_wol_mac: !secret lg2_tv_mac_address
+
+esphome:
+  includes:
+    - ${rf_airbridge_path}/include/wol_packet.h
+    - ${rf_airbridge_path}/include/wifi_wake.h
+
+api:
+  actions:
+    - action: wake_lg2
+      then:
+        - lambda: |-
+            static_assert(rf_bridge::wol::valid_mac("${lg2_tv_wol_mac}"),
+                          "lg2_tv_mac_address must be a unicast MAC in AA:BB:CC:DD:EE:FF form");
+            constexpr auto packet = rf_bridge::wol::magic_packet("${lg2_tv_wol_mac}");
+            rf_bridge::wol::send_magic_packet(packet);
