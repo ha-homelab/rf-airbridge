@@ -13,6 +13,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    uses: victron-venus/venus-os-ci-toolkit/.github/workflows/change-scope.yml@04d1a895fac608e5c972e49b127a1a792d7ad725 # main
+    with:
+      force-full: false
+      documentation-paths: "[\"GOVERNANCE.md\", \"ROADMAP.md\"]"
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -49,8 +54,11 @@ jobs:
         env:
           CXX: clang++
         run: bash fuzz/run.sh 15
-
+      - name: Test documentation-scope gate contracts
+        run: python3 .github/workflow-tests/test_docs_scope.py
   firmware:
+    needs: ["scope"]
+    if: ${{ always() }}
     name: Compile ESPHome example
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -60,11 +68,33 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Require successful change classification
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        shell: python3 {0}
+        run: |
+          import json, os
+          results = json.loads(os.environ['RESULTS'])
+          expected = ['scope']
+          if set(results) != set(expected):
+              raise SystemExit('Validation job inventory differs')
+          scope = results['scope']
+          outputs = scope.get('outputs', {})
+          run = outputs.get('run')
+          if scope['result'] != 'success' or run not in {'true', 'false'}:
+              raise SystemExit('Change scope did not succeed')
+          if run == 'false' and outputs.get('reason') != 'documentation-only':
+              raise SystemExit('Unproven documentation-only scope')
+          for name, value in results.items():
+              wanted = 'success' if run == 'true' or name == 'scope' else 'skipped'
+              if value['result'] != wanted:
+                  raise SystemExit(f'Unexpected validation result: {name}={value["result"]}, expected {wanted}')
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Compile example with dummy credentials
+        if: ${{ needs.scope.outputs.run == 'true' }}
         # Start the container after host-level monitoring is active.
         run: |
           docker run --rm \
