@@ -77,7 +77,7 @@ least 1.2 and security level at least 2; stricter defaults and existing cipher
 selection are preserved. OpenSSL security level 2 alone can accept RSA 2047,
 so inspecting only that setting is insufficient.
 
-The tested profile is CPython 3.12.14, aiohttp 3.14.4, cryptography 50.0.2 and
+The tested profile is CPython 3.12.14, aiohttp 3.14.5, cryptography 50.0.2 and
 OpenSSL 3.5.8. CPython 3.12 uses its private verified-chain accessor; newer
 versions use the public accessor when available. A missing accessor or
 unsupported key/chain representation fails closed. Older interpreters,
@@ -100,10 +100,13 @@ PYTHON
 
 Use the actual HTTPS endpoint and a certificate trusted by this interpreter.
 Normal `SSL_CERT_FILE`/`SSL_CERT_DIR` CA selection is retained. As before,
-the capture session does not consume environment proxy settings. An HTTPS
-redirect that finishes on plaintext HTTP is rejected before sending the
-administrator token; its unauthenticated HTTP upgrade may already have run.
-Do not disable CA or hostname verification to make a connection succeed.
+the capture session does not consume environment proxy settings. Use the final
+direct Home Assistant URL: all HTTP redirects are rejected before contacting
+their destination or sending the administrator token, including redirects on
+the same host. A trusted certificate on a redirected endpoint does not authorize
+that endpoint to receive your token. If a reverse proxy redirects the request,
+use its direct Home Assistant endpoint. Do not disable CA or hostname
+verification to make a connection succeed.
 
 ```sh
 mkdir -p captures
@@ -111,14 +114,14 @@ chmod 700 captures
 read -r -s -p 'Home Assistant token: ' HA_TOKEN
 export HA_TOKEN
 python tools/capture_bluetooth.py \
-  --url http://homeassistant.local:8123 \
+  --url https://homeassistant.example \
   --seconds 60 \
   --output captures/lamp-on.jsonl
 unset HA_TOKEN
 ```
 
-The command uses Bash's `read` syntax. Prefer HTTPS, including on a local
-network. The HTTP example has no transport encryption or server authentication and exposes the administrator token to
+The command uses Bash's `read` syntax. Replace the example hostname with your
+actual HTTPS endpoint. An HTTP URL has no transport encryption or server authentication and exposes the administrator token to
 anyone able to observe that connection; restrict it to an explicitly trusted,
 isolated recovery/test network. The output is created with mode
 0600 and existing files are never overwritten. The ignored `captures/`
@@ -135,6 +138,8 @@ The capture tool was exercised against a live Home Assistant instance on
 events were saved, the output mode was 0600, and the token was absent from the
 file. Automated tests cover authentication and subscription rejection, missing
 acknowledgements, file overwrite protection, and the read-only request set.
+Real loopback HTTPS tests also verify that same-origin, cross-origin and
+plaintext redirects cannot contact their target or receive the token.
 These checks validate capture infrastructure, not compatibility with an
 unidentified lamp.
 

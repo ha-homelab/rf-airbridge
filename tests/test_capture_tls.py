@@ -90,9 +90,11 @@ class TestNativeCaptureTLS(unittest.IsolatedAsyncioTestCase):
     def tearDownClass(cls):
         cls.temporary.cleanup()
 
-    async def run_case(self, name, version, expected, wrong_host=False, redirect=False):
+    async def run_case(self, name, version, expected, wrong_host=False, redirect=None,
+                       redirect_status=302):
         root, certfile, keyfile = self.fixtures[name]
-        state = {"requests": 0, "authenticated": False, "commands": [], "errors": []}
+        state = {"requests": 0, "redirects": 0, "authenticated": False,
+                 "commands": [], "errors": []}
 
         async def handler(request):
             state["requests"] += 1
@@ -111,13 +113,16 @@ class TestNativeCaptureTLS(unittest.IsolatedAsyncioTestCase):
                 await websocket.send_json({"type": "event", "event": {"synthetic": True}})
                 await websocket.receive(timeout=2)
             except (TypeError, ConnectionError) as error:
-                # A rejected plaintext redirect closes before authentication.
-                if not redirect or state["authenticated"]:
-                    state["errors"].append(type(error).__name__)
+                state["errors"].append(type(error).__name__)
             return websocket
+
+        async def redirect_request(request):
+            state["redirects"] += 1
+            return web.Response(status=redirect_status, headers={"Location": redirect_target})
 
         app = web.Application()
         app.router.add_get("/api/websocket", handler)
+        app.router.add_get("/redirect/api/websocket", redirect_request)
         runner = web.AppRunner(app, access_log=None)
         await runner.setup()
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -131,6 +136,7 @@ class TestNativeCaptureTLS(unittest.IsolatedAsyncioTestCase):
         site = web.SockSite(runner, listener, ssl_context=context)
         await site.start()
         extra_runner = None
+        redirect_target = f"https://localhost:{port}/api/websocket"
         try:
             def calibrate():
                 oracle = ssl.create_default_context(cadata=root.public_bytes(serialization.Encoding.PEM).decode())
@@ -143,19 +149,17 @@ class TestNativeCaptureTLS(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(await asyncio.to_thread(calibrate),
                              "TLSv1.2" if version == ssl.TLSVersion.TLSv1_2 else "TLSv1.3")
-            if redirect:
+            if redirect == "downgrade":
                 plain_socket = socket.socket()
                 plain_socket.bind(("127.0.0.1", 0))
                 plain_socket.listen()
                 plain_site = web.SockSite(runner, plain_socket)
                 await plain_site.start()
                 plain_port = plain_socket.getsockname()[1]
+                redirect_target = f"http://localhost:{plain_port}/api/websocket"
+            if redirect in {"cross-origin", "downgrade"}:
                 redirect_app = web.Application()
-
-                async def downgrade(request):
-                    raise web.HTTPFound(f"http://localhost:{plain_port}/api/websocket")
-
-                redirect_app.router.add_get("/api/websocket", downgrade)
+                redirect_app.router.add_get("/api/websocket", redirect_request)
                 extra_runner = web.AppRunner(redirect_app, access_log=None)
                 await extra_runner.setup()
                 redirect_socket = socket.socket()
@@ -167,17 +171,25 @@ class TestNativeCaptureTLS(unittest.IsolatedAsyncioTestCase):
                 output = Path(output_directory) / "capture.jsonl"
                 env = {"SSL_CERT_FILE": str(self.bundle), "SSL_CERT_DIR": str(self.empty_ca_directory),
                        "https_proxy": "http://127.0.0.1:1", "HTTPS_PROXY": "http://127.0.0.1:1"}
-                with patch.dict(os.environ, env), contextlib.redirect_stdout(io.StringIO()):
+                stdout = io.StringIO()
+                with patch.dict(os.environ, env), contextlib.redirect_stdout(stdout):
                     url = f"https://{'127.0.0.1' if wrong_host else 'localhost'}:{port}"
+                    if redirect == "same-origin":
+                        url += "/redirect"
                     if expected:
                         await capture.capture(url, TOKEN, output, .05)
+                    elif redirect:
+                        with self.assertRaises(capture.RedirectRejected):
+                            await capture.capture(url, TOKEN, output, .05)
                     else:
                         with self.assertRaises(RuntimeError):
                             await capture.capture(url, TOKEN, output, .05)
                 self.assertNotIn(TOKEN, output.read_text())
+                self.assertNotIn(TOKEN, stdout.getvalue())
                 self.assertEqual(output.stat().st_mode & 0o777, 0o600)
             self.assertEqual(state["authenticated"], expected)
-            self.assertEqual(state["requests"], 1 if expected or redirect else 0)
+            self.assertEqual(state["requests"], 1 if expected else 0)
+            self.assertEqual(state["redirects"], 1 if redirect else 0)
             self.assertEqual(len(state["commands"]), 2 if expected else 0)
             self.assertEqual(state["errors"], [])
         finally:
@@ -194,8 +206,12 @@ class TestNativeCaptureTLS(unittest.IsolatedAsyncioTestCase):
     async def test_hostname_verification_is_retained(self):
         await self.run_case("rsa", ssl.TLSVersion.TLSv1_3, False, wrong_host=True)
 
-    async def test_plaintext_redirect_never_receives_token(self):
-        await self.run_case("rsa", ssl.TLSVersion.TLSv1_3, False, redirect=True)
+    async def test_redirects_never_contact_target_or_receive_token(self):
+        for redirect in ("same-origin", "cross-origin", "downgrade"):
+            for status in (301, 302, 303, 307, 308):
+                with self.subTest(redirect=redirect, status=status):
+                    await self.run_case("rsa", ssl.TLSVersion.TLSv1_3, False,
+                                        redirect=redirect, redirect_status=status)
 
 
 class TestCapturePolicy(unittest.TestCase):

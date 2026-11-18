@@ -88,6 +88,16 @@ def duration(value):
     return seconds
 
 
+class RedirectRejected(RuntimeError):
+    """The requested Home Assistant endpoint tried to redirect the connection."""
+
+
+async def _reject_redirect(session, context, params):
+    # A valid TLS certificate on another endpoint does not authorize it to
+    # receive the administrator token. Stop before following any redirect.
+    raise RedirectRejected("Home Assistant redirects are not allowed; use its direct URL")
+
+
 async def capture(url, token, output, seconds):
     import aiohttp
 
@@ -103,11 +113,14 @@ async def _capture(aiohttp, url, token, output, seconds):
     events = 0
     with os.fdopen(fd, "w") as stream:
         connector = aiohttp.TCPConnector(ssl=verified_context())
+        trace = aiohttp.TraceConfig()
+        trace.on_request_redirect.append(_reject_redirect)
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30),
-                                         connector=connector, trust_env=False) as session:
+                                         connector=connector, trust_env=False,
+                                         trace_configs=[trace]) as session:
             async with session.ws_connect(url + "/api/websocket", heartbeat=20) as ws:
                 if urlsplit(url).scheme == "https" and ws.get_extra_info("ssl_object") is None:
-                    raise RuntimeError("Home Assistant HTTPS redirect lost TLS protection")
+                    raise RuntimeError("Home Assistant HTTPS connection lost TLS protection")
                 greeting = await asyncio.wait_for(ws.receive_json(), 15)
                 if greeting.get("type") != "auth_required":
                     raise RuntimeError("Unexpected Home Assistant authentication greeting")
@@ -159,6 +172,9 @@ def main():
     except KeyboardInterrupt:
         print("Capture stopped; partial output retained.", file=sys.stderr)
         return 130
+    except RedirectRejected:
+        print("Capture failed: Home Assistant redirects are not allowed; use its direct URL.", file=sys.stderr)
+        return 1
     except (OSError, RuntimeError, ImportError, ValueError, asyncio.TimeoutError) as error:
         # Exception details may include URLs or remote data. Do not print credentials or payloads.
         print(f"Capture failed ({type(error).__name__}); check connectivity, authentication, aiohttp and the output path.", file=sys.stderr)

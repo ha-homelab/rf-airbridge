@@ -26,6 +26,7 @@ enum class ReceiveResult {
   PUBLISH_FAILED,
   DECODED_PUBLISHED,
   RAW_PUBLISHED,
+  RM433_RATE_LIMITED,
 };
 
 class Receiver {
@@ -34,6 +35,8 @@ class Receiver {
   static constexpr int32_t MAX_RAW_DURATION_US = 120000;
   static constexpr uint32_t RAW_INTERVAL_MS = 500;
   static constexpr size_t MAX_PAYLOAD_BYTES = 2560;
+  static constexpr uint32_t RM433_QUIET_MS = 350;
+  static constexpr size_t MAX_RM433_CODES = 16;
 
   // Arguments must have static lifetime, normally string literals. source is a
   // short identifier (1-32 ASCII letters/digits/_/-), not an arbitrary label.
@@ -63,13 +66,26 @@ class Receiver {
     uint32_t rm433_pulse = 0;
     if (decode_rm433_24(timings, rm433_code, rm433_pulse)) {
       const uint32_t now = (esphome::millis)();
-      const bool repeat = this->rm433_seen_ && this->rm433_last_code_ == rm433_code &&
-                          static_cast<uint32_t>(now - this->rm433_last_ms_) < 350;
-      this->rm433_seen_ = true;
-      this->rm433_last_code_ = rm433_code;
-      this->rm433_last_ms_ = now;
-      if (repeat)
-        return ReceiveResult::REPEAT_SUPPRESSED;
+      Rm433HistoryEntry *available = nullptr;
+      for (auto &entry : this->rm433_history_) {
+        const bool active = entry.seen && static_cast<uint32_t>(now - entry.last_ms) < RM433_QUIET_MS;
+        if (entry.seen && entry.code == rm433_code) {
+          // Every repeat refreshes only its own quiet window, even when other
+          // buttons or unknown remotes interleave with this press.
+          entry.last_ms = now;
+          if (active)
+            return ReceiveResult::REPEAT_SUPPRESSED;
+          available = &entry;
+          break;
+        }
+        if (!active && available == nullptr)
+          available = &entry;
+      }
+      // Never evict an active press: doing so could turn its next repeat into
+      // a second native/MQTT event. Excess codes are dropped without a backlog.
+      if (available == nullptr)
+        return ReceiveResult::RM433_RATE_LIMITED;
+      *available = {rm433_code, now, true};
       if (on_rm433 != nullptr)
         on_rm433(rm433_code);
       if (!mqtt_connected)
@@ -140,6 +156,12 @@ class Receiver {
   }
 
  private:
+  struct Rm433HistoryEntry {
+    uint32_t code{0};
+    uint32_t last_ms{0};
+    bool seen{false};
+  };
+
   bool valid_configuration_() const {
     if (this->source_ == nullptr || this->decoded_topic_ == nullptr || this->raw_topic_ == nullptr ||
         this->decoded_topic_[0] == '\0' || this->raw_topic_[0] == '\0' || this->tolerance_percent_ > 100)
@@ -208,12 +230,10 @@ class Receiver {
   uint32_t boot_high_{0};
   uint32_t boot_low_{0};
   uint32_t last_raw_attempt_ms_{0};
-  uint32_t rm433_last_code_{0};
-  uint32_t rm433_last_ms_{0};
+  Rm433HistoryEntry rm433_history_[MAX_RM433_CODES]{};
   size_t used_{0};
   bool boot_initialized_{false};
   bool raw_attempted_{false};
-  bool rm433_seen_{false};
   bool overflow_{false};
   // Keep the bounded scratch buffer off the small ESP8266 callback stack.
   // Define Receiver once (global/static), rather than constructing per frame.

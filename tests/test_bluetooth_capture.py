@@ -10,6 +10,7 @@ import stat
 import tempfile
 import types
 import unittest
+from unittest.mock import patch
 
 
 spec = importlib.util.spec_from_file_location(
@@ -52,6 +53,7 @@ class TestCapture(unittest.IsolatedAsyncioTestCase):
             ClientSession=lambda **kwargs: session,
             ClientTimeout=lambda **kwargs: None,
             TCPConnector=lambda **kwargs: None,
+            TraceConfig=lambda: types.SimpleNamespace(on_request_redirect=[]),
         )
         with contextlib.redirect_stdout(io.StringIO()):
             await capture._capture(http, "https://ha.example", "private-token", output, 0.025)
@@ -115,3 +117,15 @@ class TestCapture(unittest.IsolatedAsyncioTestCase):
                 capture.duration(value)
         self.assertEqual(capture.validate_url("https://ha.example/"), "https://ha.example")
         self.assertEqual(capture.duration("600"), 600)
+
+    def test_cli_redirect_failure_is_actionable_without_remote_details(self):
+        stderr = io.StringIO()
+        with patch.object(capture.sys, "argv", [
+            "capture_bluetooth.py", "--url", "https://ha.example", "--output", "unused.jsonl",
+        ]), patch.dict(capture.os.environ, {"HA_TOKEN": "synthetic-private-token"}), \
+                patch.object(capture, "capture", side_effect=capture.RedirectRejected("remote-private-data")), \
+                contextlib.redirect_stderr(stderr):
+            self.assertEqual(capture.main(), 1)
+        self.assertIn("use its direct URL", stderr.getvalue())
+        self.assertNotIn("synthetic-private-token", stderr.getvalue())
+        self.assertNotIn("remote-private-data", stderr.getvalue())
