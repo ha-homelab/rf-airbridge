@@ -16,6 +16,7 @@ HARNESS = r"""
 #define millis() esphome::millis()
 #include "rf_receiver.h"
 #include <cassert>
+#include <iterator>
 #include <string>
 #include <vector>
 using rf_bridge::ReceiveResult;
@@ -88,6 +89,73 @@ int main(int argc, char **argv) {
     assert(receiver.on_receive(second, mqtt, false, false, native) == ReceiveResult::OFFLINE);
     assert((events == std::vector<std::string>{"button_1", "button_1", "button_2"}));
     assert(mqtt.messages.size() == 1);
+  } else if (scenario == "interleaved") {
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    esphome::test_now = 50;
+    mqtt.connected = false;
+    assert(receiver.on_receive(second, mqtt, false, false, native) == ReceiveResult::OFFLINE);
+    esphome::test_now = 100;
+    mqtt.connected = true;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    esphome::test_now = 150;
+    assert(receiver.on_receive(frame(0x654321), mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    esphome::test_now = 200;
+    assert(receiver.on_receive(second, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    // Quiet periods start at each code's last repeat, not its first event or
+    // the most recently observed different code. Exactly 350 ms permits a press.
+    esphome::test_now = 449;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    esphome::test_now = 550;
+    assert(receiver.on_receive(second, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    esphome::test_now = 799;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    assert((events == std::vector<std::string>{"button_1", "button_2", "button_2", "button_1"}));
+    assert(callbacks == 5 && mqtt.messages.size() == 4);
+  } else if (scenario == "interleaved_rollover") {
+    esphome::test_now = UINT32_MAX - 100;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    esphome::test_now = UINT32_MAX - 50;
+    assert(receiver.on_receive(second, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    esphome::test_now = 100;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    esphome::test_now = 200;
+    assert(receiver.on_receive(second, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    esphome::test_now = 450;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    esphome::test_now = 550;
+    assert(receiver.on_receive(second, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    assert((events == std::vector<std::string>{"button_1", "button_2", "button_1", "button_2"}));
+    assert(callbacks == 4 && mqtt.messages.size() == 4);
+  } else if (scenario == "capacity" || scenario == "capacity_rollover") {
+    const uint32_t start = scenario == "capacity_rollover" ? UINT32_MAX - 200 : 0;
+    esphome::test_now = start;
+    std::vector<uint32_t> codes(std::begin(CODES), std::end(CODES));
+    for (uint32_t i = 0; codes.size() < rf_bridge::Receiver::MAX_RM433_CODES; ++i)
+      codes.push_back(i);
+    for (uint32_t code : codes)
+      assert(receiver.on_receive(frame(code), mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    // Saturation cannot evict any active press or publish an excess code.
+    const auto excess = frame(0xffffff);
+    esphome::test_now = start + 50;
+    assert(receiver.on_receive(excess, mqtt, false, false, native) == ReceiveResult::RM433_RATE_LIMITED);
+    esphome::test_now = start + 100;
+    for (uint32_t code : codes)
+      assert(receiver.on_receive(frame(code), mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    // Refresh both ends: reuse must skip an active first slot, and matching
+    // the last slot must keep searching past earlier expired slots.
+    esphome::test_now = start + 200;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    assert(receiver.on_receive(frame(codes.back()), mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    esphome::test_now = start + 449;
+    assert(receiver.on_receive(excess, mqtt, false, false, native) == ReceiveResult::RM433_RATE_LIMITED);
+    assert(callbacks == codes.size() && mqtt.messages.size() == codes.size() && events.size() == 8);
+    esphome::test_now = start + 450;
+    assert(receiver.on_receive(excess, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    esphome::test_now = start + 451;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    assert(receiver.on_receive(frame(codes.back()), mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    assert(receiver.on_receive(excess, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
+    assert(callbacks == codes.size() + 1 && mqtt.messages.size() == codes.size() + 1 && events.size() == 8);
   } else if (scenario == "guard") {
     mqtt.connected = false;
     assert(receiver.on_receive(first, mqtt, true, true, native) == ReceiveResult::SUPPRESSED);
@@ -102,6 +170,11 @@ int main(int argc, char **argv) {
     // Suppressed or malformed captures must not consume the press guard.
     assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::OFFLINE);
     assert(events.size() == 1);
+    esphome::test_now = 200;
+    assert(receiver.on_receive(first, mqtt, false, true, native) == ReceiveResult::SUPPRESSED);
+    esphome::test_now = 350;
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::OFFLINE);
+    assert(events.size() == 2 && mqtt.messages.empty());
   } else if (scenario == "unknown") {
     assert(receiver.on_receive(frame(0x654321), mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
     assert(callbacks == 1 && events.empty() && mqtt.messages.size() == 1);
@@ -114,6 +187,8 @@ int main(int argc, char **argv) {
     assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
     assert(events.size() == 1 && mqtt.messages.size() == 1);
     assert(receiver.on_receive(second, mqtt, false, false, native) == ReceiveResult::DECODED_PUBLISHED);
+    assert(events.size() == 2 && mqtt.messages.size() == 2);
+    assert(receiver.on_receive(first, mqtt, false, false, native) == ReceiveResult::REPEAT_SUPPRESSED);
     assert(events.size() == 2 && mqtt.messages.size() == 2);
   } else if (scenario == "legacy") {
     mqtt.connected = false;
@@ -178,6 +253,18 @@ class NativeRm433Test(unittest.TestCase):
 
     def test_one_shared_debounce_across_mqtt_state_and_clock_rollover(self):
         self.run_scenario("repeats")
+
+    def test_interleaved_known_and_unknown_codes_keep_independent_quiet_periods(self):
+        self.run_scenario("interleaved")
+
+    def test_interleaved_codes_remain_suppressed_across_clock_rollover(self):
+        self.run_scenario("interleaved_rollover")
+
+    def test_full_history_preserves_active_codes_and_reuses_only_quiet_slots(self):
+        self.run_scenario("capacity")
+
+    def test_full_history_expiry_across_clock_rollover(self):
+        self.run_scenario("capacity_rollover")
 
     def test_tx_malformed_and_stock_protocols_do_not_emit_native_events(self):
         self.run_scenario("guard")

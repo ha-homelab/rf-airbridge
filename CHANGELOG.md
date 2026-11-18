@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- Keep independent 350 ms RM433 quiet windows for up to 16 recently observed
+  codes. Interleaved buttons and remotes no longer let repeat packets escape
+  suppression; excess distinct codes are dropped while every slot is active.
+
 ### Added
 
 - An optional native Wake-on-LAN action sends a television magic packet from
@@ -20,6 +26,10 @@
   unchanged.
 
 ### Security
+
+- Reject Bluetooth capture HTTP redirects before following them or sending
+  authentication. Even a correctly certified second HTTPS endpoint must not
+  receive the Home Assistant administrator token intended for the original URL.
 
 - Replace the obsolete Scorecard CI container with the reviewed, checksum-pinned scanner. Keep the upstream SARIF reporting policy, GitHub Security upload and retained report artifacts. The replaced CI image contained 25 high-severity dependency findings in the recorded scan. The scanner replacement changes CI tooling, not the distributed application runtime. OpenSSF REST publication remains disabled as before.
 

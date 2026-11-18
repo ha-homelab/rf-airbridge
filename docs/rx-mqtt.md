@@ -183,10 +183,16 @@ does not reproduce the short pulses.
 
 Repeated copies of the same code are suppressed until the receiver has seen
 350 ms of silence for that code. Repeats refresh that interval, so a continuous
-hold normally emits one press. Another code is accepted immediately. There is
-no release event or dedicated long-press detection; reception gaps or collisions
-can still split a hold into multiple presses. Fast repeated presses within the
-quiet interval may be combined. No received event causes an RF transmission.
+hold normally emits one press. Interleaved buttons and unknown remotes retain
+separate quiet windows. A fixed history holds up to 16 active codes without
+allocating memory per frame. Another code is accepted immediately when a slot
+is available. If all 16 codes are still active, further distinct codes are
+dropped from both native and MQTT output (`RM433_RATE_LIMITED`) until a slot
+has been quiet for 350 ms; active codes keep their repeat protection. Dropped
+frames are not queued. There is no release event or dedicated long-press
+detection; reception gaps or collisions can still split a hold into multiple
+presses. Fast repeated presses within the quiet interval may be combined.
+No received event causes an RF transmission.
 
 ## Native RM433 button events
 
